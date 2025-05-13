@@ -1,6 +1,12 @@
-<?xml version="1.0" encoding="utf-8"?>
+<!-- res/values-night/themes.xml -->
 <resources>
-    <style name="Theme.BookSearchApp" parent="Theme.Material3.Dark.NoActionBar">
-        <!-- ваши цвета для тёмной темы -->
+    <style name="Theme.AINotes" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/appSurface</item>
+    </style>
+    <style name="Theme.AINotes.SplashScreen" parent="Theme.SplashScreen">
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowBackground">@color/appSurface</item>
+        <item name="windowSplashScreenBackground">@color/appSurface</item>
+        <item name="postSplashScreenTheme">@style/Theme.AINotes</item>
     </style>
 </resources>

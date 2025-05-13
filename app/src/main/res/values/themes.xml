@@ -1,6 +1,16 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="Theme.BookSearchApp" parent="Theme.Material3.Light.NoActionBar">
-        <!-- ваши цвета для светлой темы -->
+<!-- res/values/themes.xml -->
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- основная тема приложения -->
+    <style name="Theme.AINotes" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- чтобы окно сразу рисовало нужный фон, а не белый -->
+        <item name="android:windowBackground">?attr/colorSurface</item>
     </style>
+    <!-- LaunchTheme для сплэша и preview window -->
+    <style name="Theme.AINotes.SplashScreen" parent="Theme.SplashScreen">
+    <item name="android:windowDisablePreview">true</item>              <!-- убирает белый preview window -->
+        <item name="android:windowBackground">@color/appSurface</item>
+    <item name="windowSplashScreenBackground">@color/appSurface</item>
+    <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+    <item name="postSplashScreenTheme">@style/Theme.AINotes</item>
+</style>
 </resources>

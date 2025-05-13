@@ -1,5 +1,6 @@
 package com.example.ainotes.viewModels
 
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ainotes.chatGPT.ChatGPTApiService
@@ -12,12 +13,20 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.ResponseBody
 import okio.BufferedSource
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import java.io.IOException
 import javax.inject.Inject
 
 @HiltViewModel
@@ -38,20 +47,46 @@ class ChatViewModel @Inject constructor(
 
     private val _systemPrompt = MutableStateFlow(DEFAULT_SYSTEM_PROMPT)
     val systemPrompt: StateFlow<String> = _systemPrompt.asStateFlow()
+
     val defaultSystemPrompt: String = DEFAULT_SYSTEM_PROMPT
+    private var currentCall: Call<ResponseBody>? = null
+
+    // 1) флаг, показывает, идёт ли сейчас вывод ассистента
+    private val _isAssistantWriting = MutableStateFlow(false)
+    val isAssistantWriting: StateFlow<Boolean> = _isAssistantWriting.asStateFlow()
+
+    // 2) очередь пользовательских сообщений
+    private val messageQueue = Channel<String>(Channel.UNLIMITED)
+    private var currentSendJob: Job? = null
 
     val availableModels = listOf(
         "gemma-3-1b-it",
-        "gemma-3-4b-it",
-        "grok-3-gemma3-12b",
-        "gemma-3-27b-it"
+        "grok-3-gemma3-4B",
+        "grok-3-gemma3-12b"
+        //"gemma-3-27b-it"
     )
 
     init {
+        // worker, который берёт из очереди и запускает handleSend в отдельном job
         viewModelScope.launch {
-            // Загружаем из БД только пользовательские и ассистентские сообщения
+            for (userInput in messageQueue) {
+                // ждём окончания предыдущего
+                while (_isAssistantWriting.value) delay(50)
+                // запускаем новую генерацию в своей Job
+                currentSendJob = viewModelScope.launch(Dispatchers.IO) {
+                    handleSend(userInput)
+                }
+                // ждём её окончания, чтобы не начать следующую
+                currentSendJob?.join()
+            }
+        }
+
+        // загрузка из БД
+        viewModelScope.launch {
             val persisted = chatRepo.getAllMessages()
-                .map { Message(it.role, it.content) }
+                .filter { it.content.isNotBlank() }
+                .map { Message(it.role, it.content, it.isComplete)
+                }
             _chatMessages.value = persisted
         }
     }
@@ -71,64 +106,103 @@ class ChatViewModel @Inject constructor(
                 ChatMessageEntity(
                     role = message.role,
                     content = message.content,
-                    timestamp = System.currentTimeMillis()
+                    timestamp = System.currentTimeMillis(),
+                    isComplete = message.isComplete
                 )
             )
         }
     }
 
-    private fun updateLastAssistantMessage(content: String) {
+    private fun updateLastAssistantMessage(content: String, isComplete: Boolean = false) {
         val messages = _chatMessages.value.toMutableList()
         val idx = messages.indexOfLast { it.role == "assistant" }
         if (idx != -1) {
-            messages[idx] = messages[idx].copy(content = content)
+            messages[idx] = messages[idx].copy(
+                content    = content,
+                isComplete = isComplete
+            )
             _chatMessages.value = messages
         }
     }
 
     fun sendMessage(inputText: String) {
-        // Добавляем user-сообщение в UI и репозиторий
         addMessage(Message(role = "user", content = inputText))
+        messageQueue.trySend(inputText)
+    }
 
-        viewModelScope.launch(Dispatchers.IO) {
-            // Строим список сообщений для API: сначала системный, затем все UI-сообщения
-            val allMessages = listOf(Message("system", _systemPrompt.value)) + _chatMessages.value
-
-            val request = ChatGPTRequest(
-                model = _selectedModel.value,
-                messages = allMessages,
-                stream = true
+    fun stopGeneration() {
+        // отменяем сетевой вызов
+        currentCall?.cancel()
+        // сбрасываем флаг и помечаем последнее сообщение как завершённое
+        _isAssistantWriting.value = false
+        val lastContent = _chatMessages.value.lastOrNull { it.role == "assistant" }?.content.orEmpty()
+        updateLastAssistantMessage(content = lastContent, isComplete = true)
+        // сохраняем текущее (возможно неполное) сообщение ассистента в БД
+        viewModelScope.launch {
+            chatRepo.addMessage(
+                ChatMessageEntity(
+                    role = "assistant",
+                    content = lastContent,
+                    timestamp = System.currentTimeMillis(),
+                    isComplete = true
+                )
             )
-
-            try {
-                val response = api.sendChatMessage(request)
-                if (response.isSuccessful) {
-                    response.body()?.source()?.let { source ->
-                        streamResponse(source)
-                    }
-                } else {
-                    withContext(Dispatchers.Main) {
-                        addMessage(Message(role = "assistant", content = "Ошибка: ${response.code()}"))
-                    }
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    addMessage(Message(role = "assistant", content = "Exception: ${e.localizedMessage}"))
-                }
-            }
         }
     }
 
-    private suspend fun streamResponse(source: BufferedSource) {
+    private fun handleSend(inputText: String) {
+        _isAssistantWriting.value = true
+        val allMessages = listOf(Message("system", _systemPrompt.value)) + _chatMessages.value
+        val req = ChatGPTRequest(model = _selectedModel.value, messages = allMessages, stream = true)
+
+        // получаем Call вместо suspend
+        currentCall = api.sendChatMessageCall(req)
+
+        // подготовили JSON‑парсер и StringBuilder для накопления чанков
         val gson = Gson()
         val builder = StringBuilder()
 
-        // 1) Добавляем пустое assistant-сообщение в UI
-        withContext(Dispatchers.Main) {
-            addMessage(Message(role = "assistant", content = ""))
-        }
+        // добавляем пустое сообщение ассистента, которое будем обновлять
+        addMessage(Message(role = "assistant", content = "", isComplete = false))
 
-        // 2) Стримим чанки и обновляем UI
+        currentCall?.enqueue(object : Callback<ResponseBody> {
+            override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
+                if (response.isSuccessful) {
+                    response.body()?.source()?.let { source ->
+                        // читаем стрим в корутине IO
+                        viewModelScope.launch(Dispatchers.IO) {
+                            try {
+                                streamResponse(source, gson, builder)
+                            } catch (_: IOException) {
+                                // соединение было отменено — просто выходим
+                            } finally {
+                                _isAssistantWriting.value = false
+                            }
+                        }
+                    }
+                } else {
+                    viewModelScope.launch(Dispatchers.Main) {
+                        addMessage(Message("assistant", "Ошибка: ${response.code()}"))
+                        _isAssistantWriting.value = false
+                    }
+                }
+            }
+
+            override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
+                // сюда придёт при cancel()
+                _isAssistantWriting.value = false
+            }
+        })
+    }
+
+
+    // 2) streamResponse — расширена до трёх параметров
+    private suspend fun streamResponse(
+        source: BufferedSource,
+        gson: Gson,
+        builder: StringBuilder
+    ) {
+        // Читаем строку за строкой из source
         while (!source.exhausted()) {
             val line = source.readUtf8Line().orEmpty()
             if (line.trim() == "data: [DONE]") break
@@ -146,25 +220,27 @@ class ChatViewModel @Inject constructor(
                     builder.append(chunk)
                     val cleaned = cleanResponse(builder.toString()).toString()
                     withContext(Dispatchers.Main) {
-                        updateLastAssistantMessage(cleaned)
+                        // обновляем сообщение ассистента по мере поступления текста
+                        updateLastAssistantMessage(cleaned, isComplete = false)
                     }
                 }
             }
         }
 
+        // Финальное завершение
         val finalRaw = builder.toString()
         val finalCleaned = cleanResponse(finalRaw).toString()
-
         withContext(Dispatchers.Main) {
-            updateLastAssistantMessage(finalCleaned)
+            updateLastAssistantMessage(finalCleaned, isComplete = true)
         }
 
-        // Сохраняем сырое в БД
+        // Сохраняем готовый ответ в БД
         chatRepo.addMessage(
             ChatMessageEntity(
                 role = "assistant",
                 content = finalRaw,
-                timestamp = System.currentTimeMillis()
+                timestamp = System.currentTimeMillis(),
+                isComplete = true
             )
         )
     }

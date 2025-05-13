@@ -20,7 +20,7 @@ class ThemeViewModel @Inject constructor(
 
     val isDarkTheme = dataStore.data
         .map { it[IS_DARK_THEME] ?: false }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), false)
+        //.stateIn(viewModelScope, SharingStarted.WhileSubscribed(), false)
 
     fun toggleTheme() {
         viewModelScope.launch {

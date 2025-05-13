@@ -6,7 +6,9 @@ coilCompose = "3.0.4"
 constraintlayoutCompose = "1.1.1"
 converterGsonVersion = "2.10.0"
 coreKtxVersion = "1.16.0"
+coreSplashscreen = "1.0.1"
 datastorePreferences = "1.1.4"
+foundation = "1.8.1"
 googleHiltAndroid = "2.52"
 googleHiltAndroidVersion = "2.52"
 gson = "2.11.0"
@@ -53,8 +55,10 @@ androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = 
 #noinspection SimilarGradleDependency
 androidx-core-ktx-v1160 = { module = "androidx.core:core-ktx", version.ref = "coreKtxVersion" }
 #noinspection SimilarGradleDependency
+androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashscreen" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastorePreferences" }
 #noinspection SimilarGradleDependency
+androidx-foundation = { module = "androidx.compose.foundation:foundation", version.ref = "foundation" }
 androidx-hilt-hilt-navigation-compose2 = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "androidxHiltNavigationComposeVersion" }
 #noinspection SimilarGradleDependency
 androidx-hilt-navigation-compose-v100 = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "hiltNavigationCompose" }

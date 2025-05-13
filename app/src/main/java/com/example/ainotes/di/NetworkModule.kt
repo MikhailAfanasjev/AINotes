@@ -9,6 +9,7 @@ import com.example.ainotes.chatGPT.AuthInterceptor
 import com.example.ainotes.chatGPT.ChatGPTApiService
 import com.example.ainotes.utils.BaseUrlInterceptor
 import com.example.ainotes.utils.BaseUrlManager
+import com.example.ainotes.utils.dataStore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -19,6 +20,7 @@ import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
+
 
 /** Модуль для предоставления Retrofit, API и репозитория */
 @Module
@@ -35,7 +37,7 @@ object NetworkModule {
     ): OkHttpClient =
         OkHttpClient.Builder()
             .connectTimeout(100, TimeUnit.SECONDS)
-            .readTimeout(100, TimeUnit.SECONDS)
+            .readTimeout(1000, TimeUnit.SECONDS)
             .addInterceptor(AuthInterceptor())
             .addInterceptor(BaseUrlInterceptor(baseUrlManager))
             .build()
@@ -55,9 +57,7 @@ object NetworkModule {
         retrofit.create(ChatGPTApiService::class.java)
 
     @Provides @Singleton
-    fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
-        return PreferenceDataStoreFactory.create(
-            produceFile = { context.preferencesDataStoreFile("settings") }
-        )
-    }
+    fun providePreferencesDataStore(
+        @ApplicationContext context: Context
+    ): DataStore<Preferences> = context.dataStore
 }

@@ -19,7 +19,6 @@ private val LightColorScheme = lightColorScheme(
     surface        = White, //цвет DropdownMenu
     onSurface      = AccentOrange, //цвет текста очистки и удаления
     error = HoloRedDark,
-
 )
 
 private val DarkColorScheme = darkColorScheme(

@@ -59,7 +59,7 @@ android {
 
 dependencies {
     implementation (libs.ui.tooling.preview) // Для Preview
-
+    implementation (libs.androidx.core.splashscreen)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
@@ -75,7 +75,7 @@ dependencies {
     implementation(libs.androidx.material3)  // Material Design 3 для Jetpack Compose
     implementation(libs.material)
     implementation (libs.androidx.hilt.navigation.compose.v100)
-
+    implementation (libs.androidx.foundation)
     implementation(libs.androidx.runtime.livedata)
     implementation(libs.androidx.espresso.core)
     implementation(libs.androidx.recyclerview)

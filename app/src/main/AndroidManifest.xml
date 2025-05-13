@@ -14,18 +14,17 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.BookSearchApp"
+        android:theme="@style/Theme.AINotes.SplashScreen"
         tools:targetApi="31"
         tools:ignore="MissingClass">
         <activity
             android:name="com.example.ainotes.MainActivity"
-            android:windowSoftInputMode="adjustResize|stateHidden"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true"
-            android:theme="@style/Theme.BookSearchApp">
+            android:theme="@style/Theme.AINotes">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
     </application>

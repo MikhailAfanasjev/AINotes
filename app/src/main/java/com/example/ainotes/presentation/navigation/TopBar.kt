@@ -95,13 +95,6 @@ fun TopBar(
                     .height(96.dp)
                     .drawWithContent {
                         drawContent()
-                        //val stroke = 2.dp.toPx()
-//                        drawLine(
-//                            color = colorScheme.onBackground, // цвет drawLine
-//                            start = Offset(0f, size.height - stroke / 2),
-//                            end = Offset(size.width, size.height - stroke / 2),
-//                            strokeWidth = stroke
-//                        )
                     },
                 navigationIcon = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
