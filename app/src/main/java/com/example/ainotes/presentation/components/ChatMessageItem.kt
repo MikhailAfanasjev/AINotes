@@ -36,21 +36,24 @@ fun ChatMessageItem(
     chatViewModel: ChatViewModel = hiltViewModel(),
     message: Message,
     onCreateNote: (String) -> Unit,
-    onRetry: () -> Unit,                // лямбда для повтора
+    onRetry: () -> Unit,
     showTyping: Boolean = false,
 ) {
     val isAssistant = message.role == "assistant"
     val bubbleShape = if (isAssistant) {
-        RoundedCornerShape(topStart = 0.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
+        RoundedCornerShape(0.dp, 16.dp, 16.dp, 16.dp)
     } else {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 0.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
+        RoundedCornerShape(16.dp, 0.dp, 16.dp, 16.dp)
     }
+
     val isWriting by chatViewModel.isAssistantWriting.collectAsState()
     val colorScheme = MaterialTheme.colorScheme
     val bubbleColor = if (isAssistant) colorScheme.onPrimary else colorScheme.primary
     val contentColor = colorScheme.onSecondary
-    val maxBubbleWidth = (LocalConfiguration.current.screenWidthDp.dp * 0.8f)
-    val displayText = message.content.trimEnd('\n')
+    val maxBubbleWidth = LocalConfiguration.current.screenWidthDp.dp * 0.8f
+
+    // Именно AnnotatedString
+    val displayContent = AnnotatedString(message.content)
 
     Box(
         modifier = Modifier
@@ -58,65 +61,49 @@ fun ChatMessageItem(
             .padding(vertical = 1.dp),
         contentAlignment = if (isAssistant) Alignment.CenterStart else Alignment.CenterEnd
     ) {
-        Box(
+        Surface(
+            color = bubbleColor,
+            contentColor = contentColor,
+            shape = bubbleShape,
+            tonalElevation = 0.dp,
+            shadowElevation = 4.dp,
             modifier = Modifier
-                .wrapContentWidth()               // ширина по содержимому
-                .widthIn(max = maxBubbleWidth)    // но не больше 80% экрана
-                .background(color = bubbleColor, shape = bubbleShape)
-                .padding(0.dp)
+                .widthIn(max = maxBubbleWidth)
+                .wrapContentWidth()
         ) {
-            CompositionLocalProvider(LocalContentColor provides contentColor) {
-                Surface(
-                    color = bubbleColor,
-                    contentColor = contentColor,
-                    shape = bubbleShape,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 4.dp,
-                    modifier = Modifier
-                        .widthIn(max = maxBubbleWidth)
-                        .wrapContentWidth()
-                ) {
-                    Column(
+            Column(
+                modifier = Modifier
+                    .wrapContentWidth()
+                    .widthIn(max = maxBubbleWidth)
+                    .background(color = bubbleColor, shape = bubbleShape)
+                    .padding(8.dp)
+            ) {
+                if (showTyping) {
+                    TypingIndicator(bubbleColor = bubbleColor, contentColor = contentColor)
+                }
+
+                if (displayContent.text.isNotBlank()) {
+                    // Передаём AnnotatedString дальше
+                    NoteSelectionContainer(
+                        text = displayContent,
+                        onCreateNote = onCreateNote
+                    )
+                }
+
+                if (isAssistant && message.isComplete && displayContent.text.isNotBlank()) {
+                    Row(
                         modifier = Modifier
-                            .wrapContentWidth()
-                            .widthIn(max = maxBubbleWidth)
-                            .background(color = bubbleColor, shape = bubbleShape)
-                            .padding(8.dp)
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        if (showTyping) {
-                            TypingIndicator(
-                                bubbleColor = bubbleColor,
-                                contentColor = contentColor
+                        IconButton(onClick = onRetry, modifier = Modifier.size(24.dp)) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_reload),
+                                contentDescription = "Повторить ответ",
+                                modifier = Modifier.size(16.dp),
+                                tint = contentColor
                             )
-                        }
-
-                        if (displayText.isNotBlank()) {
-                            NoteSelectionContainer(
-                                text = displayText,
-                                onCreateNote = onCreateNote
-                            )
-                        }
-
-                        // Иконка повтора внизу справа, как в NoteCard
-                        if (isAssistant && message.isComplete && message.content.isNotBlank()) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 0.dp),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                IconButton(
-                                    onClick = onRetry,
-                                    modifier = Modifier.size(16.dp)
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_reload),
-                                        contentDescription = "Повторить ответ",
-                                        modifier = Modifier.size(16.dp),
-                                        tint = colorScheme.onSecondary
-                                    )
-                                }
-                            }
                         }
                     }
                 }

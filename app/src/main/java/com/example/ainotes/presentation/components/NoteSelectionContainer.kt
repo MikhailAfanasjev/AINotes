@@ -23,58 +23,49 @@ private const val MENU_ID_SELECT_ALL = 3
 
 @Composable
 fun NoteSelectionContainer(
-    text: String,
+    text: AnnotatedString,
     onCreateNote: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val colorScheme = MaterialTheme.colorScheme
+    val textColor = MaterialTheme.colorScheme.onSecondary.toArgb()
+
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
             TextView(ctx).apply {
-
-                val textColor = colorScheme.onSecondary.toArgb()
                 setTextColor(textColor)
-                setText(text, TextView.BufferType.SPANNABLE)
                 setTextIsSelectable(true)
-            }.also { tv ->
-                tv.customSelectionActionModeCallback = object : ActionMode.Callback {
+                customSelectionActionModeCallback = object : ActionMode.Callback {
                     override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
-                        menu.clear()
-                        menu.add(0, MENU_ID_CREATE_NOTE, 0, "Создать заметку")
-                        menu.add(0, MENU_ID_COPY, 1, "Копировать")
-                        menu.add(0, MENU_ID_SELECT_ALL, 2, "Select all")
-                        return true
-                    }
-                    override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
                         menu.clear()
                         menu.add(0, MENU_ID_CREATE_NOTE, 0, "Создать заметку")
                         menu.add(0, MENU_ID_COPY, 1, "Копировать")
                         menu.add(0, MENU_ID_SELECT_ALL, 2, "Выбрать всё")
                         return true
                     }
+                    override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean = true
                     override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-                        val selStart = tv.selectionStart.coerceAtLeast(0)
-                        val selEnd = tv.selectionEnd.coerceAtLeast(0)
-                        val selectedText = tv.text.substring(
-                            selStart.coerceAtMost(selEnd),
-                            selEnd.coerceAtLeast(selStart)
+                        val selStart = selectionStart.coerceAtLeast(0)
+                        val selEnd = selectionEnd.coerceAtLeast(0)
+                        val selected = text.text.substring(
+                            minOf(selStart, selEnd),
+                            maxOf(selStart, selEnd)
                         )
                         when (item.itemId) {
                             MENU_ID_CREATE_NOTE -> {
-                                onCreateNote(selectedText)
+                                onCreateNote(selected)
                                 mode.finish()
                                 return true
                             }
                             MENU_ID_COPY -> {
                                 val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("text", selectedText))
+                                clipboard.setPrimaryClip(ClipData.newPlainText("text", selected))
                                 mode.finish()
                                 return true
                             }
                             MENU_ID_SELECT_ALL -> {
-                                (tv.text as? Spannable)?.let { sp ->
+                                (text as? Spannable)?.let { sp ->
                                     Selection.selectAll(sp)
                                 }
                                 mode.invalidate()
@@ -85,18 +76,12 @@ fun NoteSelectionContainer(
                     }
                     override fun onDestroyActionMode(mode: ActionMode) {}
                 }
-
-                tv.customInsertionActionModeCallback = object : ActionMode.Callback {
-                    override fun onCreateActionMode(mode: ActionMode, menu: Menu) = false
-                    override fun onPrepareActionMode(mode: ActionMode, menu: Menu) = false
-                    override fun onActionItemClicked(mode: ActionMode, item: MenuItem) = false
-                    override fun onDestroyActionMode(mode: ActionMode) {}
-                }
             }
         },
         update = { tv ->
-            if (tv.text.toString() != text) {
-                tv.text = text
+            // Устанавливаем plain-text из AnnotatedString
+            if (tv.text.toString() != text.text) {
+                tv.text = text.text
             }
         }
     )
