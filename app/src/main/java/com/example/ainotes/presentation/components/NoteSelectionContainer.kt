@@ -3,39 +3,46 @@ package com.example.ainotes.presentation.components
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Typeface
 import android.text.Selection
 import android.text.Spannable
 import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.TextView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-
-private const val MENU_ID_CREATE_NOTE = 1
-private const val MENU_ID_COPY = 2
-private const val MENU_ID_SELECT_ALL = 3
 
 @Composable
 fun NoteSelectionContainer(
     text: AnnotatedString,
     onCreateNote: (String) -> Unit,
+    textColor: Color,
+    backgroundColor: Color,
+    isCode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val textColor = MaterialTheme.colorScheme.onSecondary.toArgb()
 
     AndroidView(
-        modifier = modifier,
+        modifier = modifier
+            .background(backgroundColor, RoundedCornerShape(if (isCode) 8.dp else 0.dp))
+            .padding(if (isCode) 8.dp else 0.dp),
         factory = { ctx ->
             TextView(ctx).apply {
-                setTextColor(textColor)
+                setTextColor(textColor.toArgb())
                 setTextIsSelectable(true)
+                if (isCode) typeface = Typeface.MONOSPACE
                 customSelectionActionModeCallback = object : ActionMode.Callback {
                     override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
                         menu.clear()
@@ -52,37 +59,36 @@ fun NoteSelectionContainer(
                             minOf(selStart, selEnd),
                             maxOf(selStart, selEnd)
                         )
-                        when (item.itemId) {
+                        return when (item.itemId) {
                             MENU_ID_CREATE_NOTE -> {
                                 onCreateNote(selected)
                                 mode.finish()
-                                return true
+                                true
                             }
                             MENU_ID_COPY -> {
                                 val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText("text", selected))
                                 mode.finish()
-                                return true
+                                true
                             }
                             MENU_ID_SELECT_ALL -> {
-                                (text as? Spannable)?.let { sp ->
-                                    Selection.selectAll(sp)
-                                }
+                                (text as? Spannable)?.let { Selection.selectAll(it) }
                                 mode.invalidate()
-                                return true
+                                true
                             }
+                            else -> false
                         }
-                        return false
                     }
                     override fun onDestroyActionMode(mode: ActionMode) {}
                 }
             }
         },
         update = { tv ->
-            // Устанавливаем plain-text из AnnotatedString
-            if (tv.text.toString() != text.text) {
-                tv.text = text.text
-            }
+            if (tv.text.toString() != text.text) tv.text = text.text
         }
     )
 }
+
+private const val MENU_ID_CREATE_NOTE = 1
+private const val MENU_ID_COPY = 2
+private const val MENU_ID_SELECT_ALL = 3

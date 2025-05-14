@@ -19,6 +19,7 @@ private val LightColorScheme = lightColorScheme(
     surface        = White, //цвет DropdownMenu
     onSurface      = AccentOrange, //цвет текста очистки и удаления
     error = HoloRedDark,
+    primaryContainer = White
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -33,6 +34,7 @@ private val DarkColorScheme = darkColorScheme(
     surface        = DarkGray, //цвет DropdownMenu
     onSurface      = AccentOrange, //цвет текста очистки и удаления
     error = HoloRedDark,
+    primaryContainer = Black
 )
 
 @Composable

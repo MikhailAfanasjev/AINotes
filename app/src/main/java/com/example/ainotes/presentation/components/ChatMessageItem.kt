@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -52,17 +53,12 @@ fun ChatMessageItem(
         RoundedCornerShape(16.dp, 0.dp, 16.dp, 16.dp)
     }
 
-    val isWriting by chatViewModel.isAssistantWriting.collectAsState()
     val colorScheme = MaterialTheme.colorScheme
     val bubbleColor = if (isAssistant) colorScheme.onPrimary else colorScheme.primary
-    val contentColor = colorScheme.onSecondary
     val maxBubbleWidth = LocalConfiguration.current.screenWidthDp.dp * 0.8f
     val segments = remember(message.content) {
         MarkdownParser.parseSegments(message.content)
     }
-
-    // Именно AnnotatedString
-    val displayContent = AnnotatedString(message.content)
 
     Box(
         modifier = Modifier
@@ -72,10 +68,9 @@ fun ChatMessageItem(
     ) {
         Surface(
             color = bubbleColor,
-            contentColor = contentColor,
-            shape = bubbleShape,
             tonalElevation = 0.dp,
             shadowElevation = 4.dp,
+            shape = bubbleShape,
             modifier = Modifier
                 .widthIn(max = maxBubbleWidth)
                 .wrapContentWidth()
@@ -87,47 +82,35 @@ fun ChatMessageItem(
                     .background(color = bubbleColor, shape = bubbleShape)
                     .padding(8.dp)
             ) {
-                if (showTyping) {
-                    TypingIndicator(bubbleColor = bubbleColor, contentColor = contentColor)
-                }
+                if (showTyping) TypingIndicator(bubbleColor = bubbleColor, contentColor = colorScheme.onSecondary)
 
-                // Возвращена проверка на пустой контент
                 if (message.content.isNotBlank()) {
-                    // Рендерим каждый сегмент
                     segments.forEach { segment ->
                         when (segment) {
                             is MessageSegment.Text -> {
-                                Text(
-                                    text = segment.content,
-                                    color = contentColor,
-                                    style = MaterialTheme.typography.bodyMedium
+                                NoteSelectionContainer(
+                                    text = AnnotatedString(segment.content),
+                                    onCreateNote = onCreateNote,
+                                    textColor = colorScheme.onSecondary,
+                                    backgroundColor = Color.Transparent,
                                 )
                             }
                             is MessageSegment.Code -> {
-                                Box(
+                                NoteSelectionContainer(
+                                    text = AnnotatedString(segment.content),
+                                    onCreateNote = onCreateNote,
+                                    textColor = colorScheme.onSecondary,
+                                    backgroundColor = colorScheme.primaryContainer,
+                                    isCode = true,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                        .background(
-                                            color = Color(0xFF000000),
-                                            shape = RoundedCornerShape(8.dp)
-                                        )
-                                        .padding(8.dp)
-                                ) {
-                                    Text(
-                                        text = segment.content,
-                                        fontFamily = FontFamily.Monospace,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
+                                )
                             }
                         }
                     }
                 }
 
-
-                if (isAssistant && message.isComplete && displayContent.text.isNotBlank()) {
+                if (message.role == "assistant" && message.isComplete && message.content.isNotBlank()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -139,7 +122,7 @@ fun ChatMessageItem(
                                 painter = painterResource(id = R.drawable.ic_reload),
                                 contentDescription = "Повторить ответ",
                                 modifier = Modifier.size(16.dp),
-                                tint = contentColor
+                                tint = colorScheme.onSecondary
                             )
                         }
                     }

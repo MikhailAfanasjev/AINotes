@@ -78,15 +78,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.ainotes.presentation.components.ChatMessageItem
 import com.example.ainotes.presentation.components.FilterChip
-import com.example.ainotes.utils.scrollToAvoidKeyboard
 import com.example.ainotes.viewModels.ChatViewModel
 import com.example.ainotes.viewModels.ThemeViewModel
 import com.example.linguareader.R
 import kotlinx.coroutines.launch
 import com.example.ainotes.utils.scrollToBottomWithOverflow
-//import com.example.ainotes.utils.scrollToKeyboard
 
-@OptIn(ExperimentalLayoutApi::class)
 @SuppressLint("SuspiciousIndentation", "UnrememberedMutableState")
 @Composable
 fun ChatScreen(
