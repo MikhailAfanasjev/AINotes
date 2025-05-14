@@ -182,7 +182,7 @@ fun TopBar(
                                         painter = painterResource(id = R.drawable.ic_model_selection),
                                         contentDescription = null,
                                         tint = colorScheme.onSecondary,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 },
                                 text = { Text("Выбор модели", color = colorScheme.onSecondary) },
@@ -204,7 +204,7 @@ fun TopBar(
                                         painter = painterResource(id = R.drawable.ic_light_dark),
                                         contentDescription = "Переключение темы",
                                         tint = colorScheme.onSecondary,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 },
                                 text = { Text("Тема", color = colorScheme.onSecondary) },
@@ -222,7 +222,7 @@ fun TopBar(
                                             painter = painterResource(id = R.drawable.ic_remove),
                                             contentDescription = "Очистить чат",
                                             tint = colorScheme.onSurface, // цвет иконки удаления
-                                            modifier = Modifier.size(24.dp)
+                                            modifier = Modifier.size(16.dp)
                                         )
                                     },
                                     text = { Text("Очистить чат", color = colorScheme.onSurface) }, // цвет текста очистки
@@ -240,7 +240,7 @@ fun TopBar(
                                             painter = painterResource(id = R.drawable.ic_remove),
                                             contentDescription = "Удалить заметки",
                                             tint = colorScheme.onSurface, // цвет иконки удаления
-                                            modifier = Modifier.size(24.dp)
+                                            modifier = Modifier.size(16.dp)
                                         )
                                     },
                                     text = { Text("Удалить заметки", color = colorScheme.onSurface) }, // цвет текста очистки
@@ -264,10 +264,11 @@ fun TopBar(
                                 expanded = true,
                                 onDismissRequest = { showModelMenu = false },
                                 offset = offsetDp,
+                                shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier
                                     .width(200.dp)
-                                    .clip(RoundedCornerShape(12.dp))
                                     .background(colorScheme.background) // фон меню моделей
+
                             ) {
                                 models.forEach { model ->
                                     DropdownMenuItem(
@@ -280,7 +281,7 @@ fun TopBar(
                                                         showModelMenu = false
                                                     },
                                                     colors = RadioButtonDefaults.colors(
-                                                        selectedColor = colorScheme.primary, // цвет выбранного радио
+                                                        selectedColor = colorScheme.primary,
                                                         unselectedColor = colorScheme.tertiary
                                                     )
                                                 )

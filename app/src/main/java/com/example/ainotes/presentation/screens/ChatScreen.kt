@@ -128,7 +128,7 @@ fun ChatScreen(
 
     val actions = listOf(
         "Написать краткую инструкцию" to "Напиши краткую инструкцию",
-        "Написать код" to "Тебе нужно принять роль программиста. Твоя главная цель - Написать оптимальный надежный код и объяснить его логику работы. В начале и конце кода ставь ```",
+        "Написать код" to "Ты опытный программист. Твоя главная цель - Написать оптимальный надежный код и объяснить его логику работы. В начале и в конце блока с кодом всегда ставь ```",
         "Тест с вариантами ответа" to "Пиши только правильный вариант ответа на вопрос",
         "Написать историю" to "Ты исполняешь роль писателя. Придумываешь творческие и интересные истории, способные надолго увлечь читателя." +
                 " Ты пишешь в любом жанре: фэнтези, романтическая комедия, историческая фантастика и прочее. Задача состоит в том," +
@@ -139,7 +139,9 @@ fun ChatScreen(
     //при изменении списка сообщений автоматически скроллим вниз, если пользователь не взаимодействовал
     LaunchedEffect(chatMessages) {
         if (chatMessages.isNotEmpty() && !userInteracted.value) {
-            scrollToBottomWithOverflow(listState, bottomPaddingPx)
+            coroutineScope.launch {
+                scrollToBottomWithOverflow(listState, bottomPaddingPx)
+            }
         }
     }
 
@@ -149,17 +151,6 @@ fun ChatScreen(
             userInteracted.value = false
         }
     }
-
-    //при изменении высоты клавиатуры или числа сообщений скроллит вниз,
-//    LaunchedEffect(imePadding) {
-//        listState.scrollToAvoidKeyboard(imePadding)
-//    }
-
-//    LaunchedEffect(keyboardHeight, chatMessages.size) {
-//        if (chatMessages.isNotEmpty()) {
-//            scrollToKeyboard(listState, bottomPaddingPx)
-//        }
-//    }
 
     //при завершении написания ассистентом скрывает клавиатуру
     LaunchedEffect(isWriting) {

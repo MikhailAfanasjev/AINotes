@@ -1,9 +1,6 @@
 package com.example.ainotes.utils
 
-import android.util.Log
-
 object MarkdownParser {
-    private const val TAG = "MarkdownParser"
 
     /**
      * Разбирает входную строку с Markdown-разметкой на список сегментов:
@@ -13,10 +10,8 @@ object MarkdownParser {
      * При каждом встретившемся ``` переключается режим: если код, то начинаем кодовый сегмент;
      * если текст, то возвращаемся в текстовый режим. Между сегментами код и текст обрабатываются отдельно.
      */
-    fun parseSegments(input: String): List<MessageSegment> {
-        // Логируем текст до парсинга
-        Log.d(TAG, "Parsing input: \n$input")
 
+    fun parseSegments(input: String): List<MessageSegment> {
         val segments = mutableListOf<MessageSegment>()
         val delimiter = "```"
         var index = 0
