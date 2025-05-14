@@ -1,58 +1,61 @@
 package com.example.ainotes.utils
 
+import android.util.Log
+
 object MarkdownParser {
+    private const val TAG = "MarkdownParser"
+
     /**
      * Разбирает входную строку с Markdown-разметкой на список сегментов:
      * - MessageSegment.Text для обычного текста
      * - MessageSegment.Code для фрагментов кода
      *
-     * Код после первого ``` сразу считается блоком кода, даже без закрывающих ```. После следующего ``` режим меняется.
+     * При каждом встретившемся ``` переключается режим: если код, то начинаем кодовый сегмент;
+     * если текст, то возвращаемся в текстовый режим. Между сегментами код и текст обрабатываются отдельно.
      */
     fun parseSegments(input: String): List<MessageSegment> {
+        // Логируем текст до парсинга
+        Log.d(TAG, "Parsing input: \n$input")
+
         val segments = mutableListOf<MessageSegment>()
         val delimiter = "```"
-        var remaining = input
-        var isCodeMode = false
+        var index = 0
+        var isCode = false
+        var lastIndex = 0
 
-        while (true) {
-            val idx = remaining.indexOf(delimiter)
-            if (idx < 0) break
+        while (index < input.length) {
+            val next = input.indexOf(delimiter, index)
+            if (next == -1) break
 
-            // Часть до ```
-            val part = remaining.substring(0, idx)
-            if (part.isNotEmpty()) {
-                if (isCodeMode) {
-                    segments += MessageSegment.Code(part)
-                } else {
-                    segments += MessageSegment.Text(part)
-                }
+            // Добавляем текст до блока ```
+            if (next > index) {
+                val part = input.substring(index, next)
+                if (isCode) segments += MessageSegment.Code(part)
+                else segments += MessageSegment.Text(part)
             }
 
-            // Откусываем маркер
-            remaining = remaining.substring(idx + delimiter.length)
-            isCodeMode = !isCodeMode
+            index = next + delimiter.length
+            isCode = !isCode
 
-            // Если открыт блок кода с меткой языка, пропускаем первую строку
-            if (isCodeMode) {
-                // Проверяем, есть ли язык перед переносом строки
-                val nlIndex = remaining.indexOf('\n')
-                if (nlIndex >= 0) {
-                    val lang = remaining.substring(0, nlIndex)
-                    if (lang.matches(Regex("^[a-zA-Z0-9_-]+$"))) {
-                        // Пропускаем метку языка и перевод строки
-                        remaining = remaining.substring(nlIndex + 1)
+            // Пропустить возможную метку языка при начале кода
+            if (isCode) {
+                val nl = input.indexOf('\n', index)
+                if (nl != -1) {
+                    val possibleLang = input.substring(index, nl).trim()
+                    if (possibleLang.matches(Regex("^[a-zA-Z0-9_-]+$"))) {
+                        index = nl + 1
                     }
                 }
             }
+
+            lastIndex = index
         }
 
-        // Остаток текста или кода
-        if (remaining.isNotEmpty()) {
-            if (isCodeMode) {
-                segments += MessageSegment.Code(remaining)
-            } else {
-                segments += MessageSegment.Text(remaining)
-            }
+        // Добавить оставшийся текст
+        if (lastIndex < input.length) {
+            val part = input.substring(lastIndex)
+            if (isCode) segments += MessageSegment.Code(part)
+            else segments += MessageSegment.Text(part)
         }
 
         return segments
