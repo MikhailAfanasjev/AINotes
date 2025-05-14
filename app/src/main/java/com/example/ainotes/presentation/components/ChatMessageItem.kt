@@ -16,18 +16,24 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.ainotes.chatGPT.Message
+import com.example.ainotes.utils.MarkdownParser
+import com.example.ainotes.utils.MessageSegment
 import com.example.ainotes.viewModels.ChatViewModel
 import com.example.linguareader.R
 
@@ -51,6 +57,9 @@ fun ChatMessageItem(
     val bubbleColor = if (isAssistant) colorScheme.onPrimary else colorScheme.primary
     val contentColor = colorScheme.onSecondary
     val maxBubbleWidth = LocalConfiguration.current.screenWidthDp.dp * 0.8f
+    val segments = remember(message.content) {
+        MarkdownParser.parseSegments(message.content)
+    }
 
     // Именно AnnotatedString
     val displayContent = AnnotatedString(message.content)
@@ -82,13 +91,41 @@ fun ChatMessageItem(
                     TypingIndicator(bubbleColor = bubbleColor, contentColor = contentColor)
                 }
 
-                if (displayContent.text.isNotBlank()) {
-                    // Передаём AnnotatedString дальше
-                    NoteSelectionContainer(
-                        text = displayContent,
-                        onCreateNote = onCreateNote
-                    )
+                // Возвращена проверка на пустой контент
+                if (message.content.isNotBlank()) {
+                    // Рендерим каждый сегмент
+                    segments.forEach { segment ->
+                        when (segment) {
+                            is MessageSegment.Text -> {
+                                Text(
+                                    text = segment.content,
+                                    color = contentColor,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            is MessageSegment.Code -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .background(
+                                            color = Color(0xFF000000),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(8.dp)
+                                ) {
+                                    Text(
+                                        text = segment.content,
+                                        fontFamily = FontFamily.Monospace,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
+
 
                 if (isAssistant && message.isComplete && displayContent.text.isNotBlank()) {
                     Row(

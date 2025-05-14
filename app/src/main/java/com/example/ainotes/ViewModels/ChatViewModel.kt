@@ -40,7 +40,7 @@ class ChatViewModel @Inject constructor(
     }
 
     private val _chatMessages = MutableStateFlow<List<Message>>(emptyList())
-    val chatMessages: StateFlow<List<Message>> = _chatMessages.asStateFlow()
+    val chatMessages: StateFlow<List<Message>> = _chatMessages
 
     private val _selectedModel = MutableStateFlow("grok-3-gemma3-12b-distilled")
     val selectedModel: StateFlow<String> = _selectedModel.asStateFlow()
@@ -84,8 +84,15 @@ class ChatViewModel @Inject constructor(
         // загрузка из БД
         viewModelScope.launch {
             val persisted = chatRepo.getAllMessages()
-                .filter { it.content.isNotBlank() }
-                .map { Message(it.role, it.content, it.isComplete)
+                // фильтруем пустые
+                .filter { it.contentRaw.isNotBlank() }
+                // конвертируем каждую строку в AnnotatedString
+                .map { entity ->
+                    Message(
+                        role = entity.role,
+                        content = cleanResponse(entity.contentRaw).text,
+                        isComplete = entity.isComplete
+                    )
                 }
             _chatMessages.value = persisted
         }
@@ -105,9 +112,9 @@ class ChatViewModel @Inject constructor(
             chatRepo.addMessage(
                 ChatMessageEntity(
                     role = message.role,
-                    content = message.content,
+                    contentRaw = message.content,
                     timestamp = System.currentTimeMillis(),
-                    isComplete = message.isComplete
+                    isComplete = true
                 )
             )
         }
@@ -142,7 +149,7 @@ class ChatViewModel @Inject constructor(
             chatRepo.addMessage(
                 ChatMessageEntity(
                     role = "assistant",
-                    content = lastContent,
+                    contentRaw = lastContent,
                     timestamp = System.currentTimeMillis(),
                     isComplete = true
                 )
@@ -218,10 +225,10 @@ class ChatViewModel @Inject constructor(
 
                 if (chunk.isNotEmpty()) {
                     builder.append(chunk)
-                    val cleaned = cleanResponse(builder.toString()).toString()
+                    val annotated = cleanResponse(builder.toString())
                     withContext(Dispatchers.Main) {
                         // обновляем сообщение ассистента по мере поступления текста
-                        updateLastAssistantMessage(cleaned, isComplete = false)
+                        updateLastAssistantMessage(annotated.text, isComplete = false)
                     }
                 }
             }
@@ -231,14 +238,14 @@ class ChatViewModel @Inject constructor(
         val finalRaw = builder.toString()
         val finalCleaned = cleanResponse(finalRaw).toString()
         withContext(Dispatchers.Main) {
-            updateLastAssistantMessage(finalCleaned, isComplete = true)
+            updateLastAssistantMessage(cleanResponse(builder.toString()).text, isComplete = true)
         }
 
         // Сохраняем готовый ответ в БД
         chatRepo.addMessage(
             ChatMessageEntity(
                 role = "assistant",
-                content = finalRaw,
+                contentRaw = finalRaw,
                 timestamp = System.currentTimeMillis(),
                 isComplete = true
             )

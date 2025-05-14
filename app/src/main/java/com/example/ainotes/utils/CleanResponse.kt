@@ -21,49 +21,34 @@ fun cleanResponse(response: String): AnnotatedString {
     val preprocessed = response
         .replace(Regex("(?m)^\\s*[-*]\\s+"), "— ")
         .replace(Regex("(?m)^###\\s*(.*)$")) { m ->
-            "\n\n" + m.groupValues[1]
+            m.groupValues[1]
                 .replaceFirstChar { it.uppercaseChar() }
-                .uppercase() +
-                    "\n\n"
+                .uppercase()
         }
-
     // 2. Шаблон для кодового блока: учитывает необязательную метку языка
-    val codeBlockPattern = Regex("(?s)(?:\\w+)?\\n(.*?)")
-
+    val codeBlockPattern = Regex("(?s)(?:```\\w+\\n)?```?\\n(.*?)```?")
     val parts = mutableListOf<Pair<String, SpanStyle?>>()
     var lastIndex = 0
-
     for (match in codeBlockPattern.findAll(preprocessed)) {
         val start = match.range.first
         val end = match.range.last + 1
-
-        // Обычный текст до блока
         if (start > lastIndex) {
             parts += preprocessed.substring(lastIndex, start) to null
         }
-
-        // Содержимое блока (первая группа) без служебных строк
         val rawCode = match.groupValues[1].trim('\n')
-
-        // Добавляем отступы и стиль
         val codeWithPadding = "\n$rawCode\n"
         val codeStyle = SpanStyle(
             fontFamily = FontFamily.Monospace,
             background = Color(0xFFE0EEEE)
         )
         parts += codeWithPadding to codeStyle
-
         lastIndex = end
     }
-
-    // Остаток после последнего блока
     if (lastIndex < preprocessed.length) {
         parts += preprocessed.substring(lastIndex) to null
     }
-
     // 3. Собираем конечный AnnotatedString, применяя подчёркивания и полужирное
     val inlinePattern = Regex("\\*\\*(.*?)\\*\\*|\\*(.*?)\\*")
-
     return buildAnnotatedString {
         for ((text, style) in parts) {
             if (style != null) {
@@ -73,12 +58,12 @@ fun cleanResponse(response: String): AnnotatedString {
                 for (m in inlinePattern.findAll(text)) {
                     append(text.substring(last, m.range.first))
                     when {
-                        m.groups[1] != null -> withStyle(
-                            SpanStyle(fontWeight = FontWeight.Bold)
-                        ) { append(m.groups[1]!!.value) }
-                        m.groups[2] != null -> withStyle(
-                            SpanStyle(fontStyle = FontStyle.Italic)
-                        ) { append(m.groups[2]!!.value) }
+                        m.groups[1] != null -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                            append(m.groups[1]!!.value)
+                        }
+                        m.groups[2] != null -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+                            append(m.groups[2]!!.value)
+                        }
                     }
                     last = m.range.last + 1
                 }
