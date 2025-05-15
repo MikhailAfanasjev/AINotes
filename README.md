@@ -9,7 +9,7 @@
 * Сохранять фрагменты переписки как заметки
 * Просматривать, редактировать и удалять ранее созданные заметки
 
-![AINotes Screenshot](https://github.com/user-attachments/assets/b59f9ef0-1db5-4da7-bf15-abc98852f894)
+<img src="https://github.com/user-attachments/assets/b59f9ef0-1db5-4da7-bf15-abc98852f894" alt="AINotes Screenshot" width="400"/>
 
 ---
 
@@ -56,3 +56,4 @@
 * **Настройки:** DataStore (Preferences), EncryptedSharedPreferences
 * **Асинхронность:** Coroutines, Channels, StateFlow
 * **Прочее:** SplashScreen API, AppCompatDelegate для ночного режима
+
