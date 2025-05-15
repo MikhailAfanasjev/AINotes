@@ -60,9 +60,9 @@ class ChatViewModel @Inject constructor(
     private var currentSendJob: Job? = null
 
     val availableModels = listOf(
-        "gemma-3-1b-it",
-        "grok-3-gemma3-4B",
-        "grok-3-gemma3-12b"
+        "gemma-3-1b-it (очень быстрая, базовая точность)",
+        "grok-3-gemma3-4b (сбалансированная скорость и точность)",
+        "grok-3-gemma3-12b (умеренная скорость, высокая точность)"
         //"gemma-3-27b-it"
     )
 

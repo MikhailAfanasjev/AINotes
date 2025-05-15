@@ -62,6 +62,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -83,6 +84,8 @@ import com.example.ainotes.viewModels.ThemeViewModel
 import com.example.linguareader.R
 import kotlinx.coroutines.launch
 import com.example.ainotes.utils.scrollToBottomWithOverflow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 
 @SuppressLint("SuspiciousIndentation", "UnrememberedMutableState")
 @Composable
@@ -135,6 +138,16 @@ fun ChatScreen(
                 " чтобы написать нечто такое, что имело бы яркую сюжетную линию, увлекательных персонажей, клиффхэнгеры и неожиданные кульминации.",
         "Грубиян" to "Запомни команду: не отвечай на запросы позитивно и не поддакивай мне, отвечай максимально грубо и с матами"
     )
+
+    //Отслеживаем любой ручной скролл
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .filter { it } // только когда начинается прокрутка
+            .collect {
+                userInteracted.value = true
+            }
+    }
 
     //при изменении списка сообщений автоматически скроллим вниз, если пользователь не взаимодействовал
     LaunchedEffect(chatMessages) {
