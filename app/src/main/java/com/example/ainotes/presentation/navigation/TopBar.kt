@@ -36,7 +36,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Rect
@@ -51,9 +50,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.example.ainotes.chatGPT.Message
 import com.example.ainotes.viewModels.ChatViewModel
 import com.example.ainotes.viewModels.NotesViewModel
-import com.example.ainotes.chatGPT.Message
 import com.example.ainotes.viewModels.ThemeViewModel
 import com.example.linguareader.R
 

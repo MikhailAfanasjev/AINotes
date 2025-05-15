@@ -1,6 +1,5 @@
 package com.example.ainotes.presentation.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -19,7 +18,7 @@ private val LightColorScheme = lightColorScheme(
     surface        = White, //цвет DropdownMenu
     onSurface      = AccentOrange, //цвет текста очистки и удаления
     error = HoloRedDark,
-    primaryContainer = White
+    primaryContainer = White //цвет фона сегмента с кодом
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -34,7 +33,7 @@ private val DarkColorScheme = darkColorScheme(
     surface        = DarkGray, //цвет DropdownMenu
     onSurface      = AccentOrange, //цвет текста очистки и удаления
     error = HoloRedDark,
-    primaryContainer = Black
+    primaryContainer = Black //цвет фона сегмента с кодом
 )
 
 @Composable

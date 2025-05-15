@@ -4,22 +4,12 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.example.ainotes.presentation.ui.theme.Black
-import com.example.ainotes.presentation.ui.theme.Blue
-import com.example.ainotes.presentation.ui.theme.LightGray
-import com.example.ainotes.presentation.ui.theme.White
-import com.example.linguareader.R
 
 @Composable
 fun FilterChip(

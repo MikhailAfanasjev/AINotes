@@ -1,6 +1,5 @@
 package com.example.ainotes.viewModels
 
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ainotes.chatGPT.ChatGPTApiService
@@ -46,7 +45,6 @@ class ChatViewModel @Inject constructor(
     val selectedModel: StateFlow<String> = _selectedModel.asStateFlow()
 
     private val _systemPrompt = MutableStateFlow(DEFAULT_SYSTEM_PROMPT)
-    val systemPrompt: StateFlow<String> = _systemPrompt.asStateFlow()
 
     val defaultSystemPrompt: String = DEFAULT_SYSTEM_PROMPT
     private var currentCall: Call<ResponseBody>? = null
@@ -74,7 +72,7 @@ class ChatViewModel @Inject constructor(
                 while (_isAssistantWriting.value) delay(50)
                 // запускаем новую генерацию в своей Job
                 currentSendJob = viewModelScope.launch(Dispatchers.IO) {
-                    handleSend(userInput)
+                    handleSend()
                 }
                 // ждём её окончания, чтобы не начать следующую
                 currentSendJob?.join()
@@ -157,7 +155,7 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun handleSend(inputText: String) {
+    private fun handleSend() {
         _isAssistantWriting.value = true
         val allMessages = listOf(Message("system", _systemPrompt.value)) + _chatMessages.value
         val req = ChatGPTRequest(model = _selectedModel.value, messages = allMessages, stream = true)
@@ -236,7 +234,6 @@ class ChatViewModel @Inject constructor(
 
         // Финальное завершение
         val finalRaw = builder.toString()
-        val finalCleaned = cleanResponse(finalRaw).toString()
         withContext(Dispatchers.Main) {
             updateLastAssistantMessage(cleanResponse(builder.toString()).text, isComplete = true)
         }

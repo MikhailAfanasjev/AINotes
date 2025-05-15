@@ -1,7 +1,6 @@
 package com.example.ainotes.presentation.screens
 
 import android.annotation.SuppressLint
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -12,24 +11,17 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.imeNestedScroll
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,8 +29,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -46,7 +36,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -55,8 +44,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -79,13 +66,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.ainotes.presentation.components.ChatMessageItem
 import com.example.ainotes.presentation.components.FilterChip
+import com.example.ainotes.utils.scrollToBottomWithOverflow
 import com.example.ainotes.viewModels.ChatViewModel
 import com.example.ainotes.viewModels.ThemeViewModel
 import com.example.linguareader.R
-import kotlinx.coroutines.launch
-import com.example.ainotes.utils.scrollToBottomWithOverflow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
 
 @SuppressLint("SuspiciousIndentation", "UnrememberedMutableState")
 @Composable
@@ -99,20 +86,12 @@ fun ChatScreen(
     var userInput by rememberSaveable { mutableStateOf("") }
     val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     val chatMessages by chatViewModel.chatMessages.collectAsState()
-    val selectedModel by chatViewModel.selectedModel.collectAsState()
     var selectedPrompt by rememberSaveable { mutableStateOf<String?>(null) }
-    val models = chatViewModel.availableModels
     val isWriting by chatViewModel.isAssistantWriting.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
-    val isDarkTheme by themeViewModel.isDarkTheme.collectAsState(initial = initialDarkTheme)
     val userInteracted = remember { mutableStateOf(false) }
-    val imeBottomPx = WindowInsets.ime.getBottom(LocalDensity.current)
-    val keyboardHeight = WindowInsets.ime.getBottom(LocalDensity.current)
-    val messageHeights = remember { mutableStateMapOf<Int, Int>() }
     val bottomPaddingPx = with(LocalDensity.current) { 10.dp.roundToPx() }
-    val imePadding = WindowInsets.ime.getBottom(LocalDensity.current)
-    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
 
     val isAtBottom by remember {
         derivedStateOf {

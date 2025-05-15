@@ -44,7 +44,7 @@ fun AddEditNoteScreen(
     viewModel: NotesViewModel = hiltViewModel(),
     initialText: String = ""
 ) {
-    val noteIdLong: Long? = noteId?.toLong()
+    val noteIdLong: Long? = noteId
     val isEditing = noteIdLong != null && noteIdLong != -1L
 
     var title by remember { mutableStateOf("") }

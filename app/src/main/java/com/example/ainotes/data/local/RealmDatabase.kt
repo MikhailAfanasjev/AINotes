@@ -11,14 +11,18 @@ object RealmHelper {
         Realm.init(context)
 
         // 2) Собираем конфигурацию, обязательно подключаем default‑модуль
-        val config = RealmConfiguration.Builder()
-            .name("notes.realm")
-            .schemaVersion(1)
-            .deleteRealmIfMigrationNeeded()
-            .modules(getDefaultModule())
-            .build()
+        val config = getDefaultModule()?.let {
+            RealmConfiguration.Builder()
+                .name("notes.realm")
+                .schemaVersion(1)
+                .deleteRealmIfMigrationNeeded()
+                .modules(it)
+                .build()
+        }
 
         // 3) Устанавливаем конфигурацию по‑умолчанию
-        Realm.setDefaultConfiguration(config)
+        if (config != null) {
+            Realm.setDefaultConfiguration(config)
+        }
     }
 }

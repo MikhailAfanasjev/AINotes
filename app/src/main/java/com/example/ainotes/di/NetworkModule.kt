@@ -2,9 +2,7 @@ package com.example.ainotes.di
 
 import android.content.Context
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.preferencesDataStoreFile
 import com.example.ainotes.chatGPT.AuthInterceptor
 import com.example.ainotes.chatGPT.ChatGPTApiService
 import com.example.ainotes.utils.BaseUrlInterceptor
@@ -15,11 +13,11 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import javax.inject.Singleton
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
+import javax.inject.Singleton
 
 
 /** Модуль для предоставления Retrofit, API и репозитория */
