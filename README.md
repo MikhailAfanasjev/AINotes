@@ -12,14 +12,12 @@
 * Получать ответы в режиме потоковой передачи (streaming)
 * Сохранять фрагменты переписки как заметки
 
-  <p align="left">
-    <img src="https://github.com/user-attachments/assets/553d304d-be53-4c7c-a0ad-5c8fe725759f" alt="AINotes Screenshot" width="300"/>
-  </p>
-  <p align="left">
-    <img src="https://github.com/user-attachments/assets/3a8eff49-d040-41bb-bdba-003b1710fbd4" alt="AINotes Screenshot" width="300"/>
-  </p>
-* Просматривать, редактировать и удалять ранее созданные заметки
+  <div style="display: flex; gap: 16px; align-items: flex-start;">
+  <img src="https://github.com/user-attachments/assets/553d304d-be53-4c7c-a0ad-5c8fe725759f" alt="AINotes Screenshot" width="300"/>
+  <img src="https://github.com/user-attachments/assets/3a8eff49-d040-41bb-bdba-003b1710fbd4" alt="AINotes Screenshot" width="300"/>
 
+</div>
+* Просматривать, редактировать и удалять ранее созданные заметки
   <p align="left">
     <img src="https://github.com/user-attachments/assets/4dfa35aa-84cc-4da3-9d65-9cacf87444aa" alt="AINotes Screenshot" width="300"/>
   </p>
