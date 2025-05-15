@@ -95,8 +95,6 @@ fun ChatMessageItem(
                                     textColor = colorScheme.onSecondary,
                                     backgroundColor = colorScheme.primaryContainer,
                                     isCode = true,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
                                 )
                             }
                         }
