@@ -1,23 +1,29 @@
 ## Описание
 
 **AINotes** объединяет чат с языковой моделью (локально в LM Studio или через API-провайдер с Bearer‑токеном) и систему ведения заметок на базе Realm.
+
 Пользователь может:
+
 * Вести диалог с ассистентом
-<p align="right">
-<img src="https://github.com/user-attachments/assets/d80bda05-1305-40e3-b8d1-b6fea20fe415" alt="AINotes Screenshot" width="300"/>
-<p/>
+
+  <p align="left">
+    <img src="https://github.com/user-attachments/assets/d80bda05-1305-40e3-b8d1-b6fea20fe415" alt="AINotes Screenshot" width="300"/>
+  </p>
 * Получать ответы в режиме потоковой передачи (streaming)
 * Сохранять фрагменты переписки как заметки
-<p align="right">
-<img src="https://github.com/user-attachments/assets/553d304d-be53-4c7c-a0ad-5c8fe725759f" alt="AINotes Screenshot" width="300"/>
-<p/>
-<p align="right">
-<img src="https://github.com/user-attachments/assets/3a8eff49-d040-41bb-bdba-003b1710fbd4" alt="AINotes Screenshot" width="300"/>
-<p/>
+
+  <p align="left">
+    <img src="https://github.com/user-attachments/assets/553d304d-be53-4c7c-a0ad-5c8fe725759f" alt="AINotes Screenshot" width="300"/>
+  </p>
+  <p align="left">
+    <img src="https://github.com/user-attachments/assets/3a8eff49-d040-41bb-bdba-003b1710fbd4" alt="AINotes Screenshot" width="300"/>
+  </p>
 * Просматривать, редактировать и удалять ранее созданные заметки
-<p align="right">
-<img src="https://github.com/user-attachments/assets/4dfa35aa-84cc-4da3-9d65-9cacf87444aa" alt="AINotes Screenshot" width="300"/>
-<p/>
+
+  <p align="left">
+    <img src="https://github.com/user-attachments/assets/4dfa35aa-84cc-4da3-9d65-9cacf87444aa" alt="AINotes Screenshot" width="300"/>
+  </p>
+
 ---
 
 ## Основные возможности
@@ -25,7 +31,6 @@
 ### 1. Интерактивный чат
 
 * Поддержка системных подсказок и переключение моделей (gemma-1b, gemma3-4b, gemma3-12b)
-* 
 * Потоковая генерация ответов с постепенным обновлением UI
 * Остановка генерации по нажатию кнопки
 * Автопрокрутка к последнему сообщению (с учётом пользовательского скролла)
@@ -64,4 +69,3 @@
 * **Настройки:** DataStore (Preferences), EncryptedSharedPreferences
 * **Асинхронность:** Coroutines, Channels, StateFlow
 * **Прочее:** SplashScreen API, AppCompatDelegate для ночного режима
-
