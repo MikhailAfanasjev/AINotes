@@ -1,27 +1,28 @@
 package com.example.ainotes.presentation.components
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItemDefaults.contentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -32,6 +33,7 @@ import com.example.ainotes.utils.MarkdownParser
 import com.example.ainotes.utils.MessageSegment
 import com.example.ainotes.viewModels.ChatViewModel
 import com.example.linguareader.R
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun ChatMessageItem(
@@ -52,6 +54,10 @@ fun ChatMessageItem(
     val bubbleColor = if (isAssistant) colorScheme.onPrimary else colorScheme.primary
     val maxBubbleWidth = LocalConfiguration.current.screenWidthDp.dp * 0.8f
     val segments = MarkdownParser.parseSegments(message.content)
+    val context = LocalContext.current
+
+    // Менеджер буфера обмена
+    val clipboardManager = LocalClipboardManager.current
 
     Box(
         modifier = Modifier
@@ -101,14 +107,39 @@ fun ChatMessageItem(
                     }
                 }
 
-                if (message.role == "assistant" && message.isComplete && message.content.isNotBlank()) {
+                if (isAssistant && message.isComplete && message.content.isNotBlank()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = onRetry, modifier = Modifier.size(24.dp)) {
+                        // Копирование с уведомлением
+                        IconButton(
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString(message.content))
+                                Toast
+                                    .makeText(context, "Текст скопирован", Toast.LENGTH_SHORT)
+                                    .show()
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_copy),
+                                contentDescription = "Копировать ответ",
+                                modifier = Modifier.size(16.dp),
+                                tint = colorScheme.onSecondary
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Повторить ответ
+                        IconButton(
+                            onClick = onRetry,
+                            modifier = Modifier.size(24.dp)
+                        ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_reload),
                                 contentDescription = "Повторить ответ",
