@@ -37,7 +37,6 @@ fun NoteSelectionContainer(
             .padding(if (isCode) 8.dp else 0.dp),
         factory = { ctx ->
             TextView(ctx).apply {
-                setTextColor(textColor.toArgb())
                 setTextIsSelectable(true)
                 if (isCode) typeface = Typeface.MONOSPACE
                 customSelectionActionModeCallback = object : ActionMode.Callback {
@@ -81,7 +80,13 @@ fun NoteSelectionContainer(
             }
         },
         update = { tv ->
-            if (tv.text.toString() != text.text) tv.text = text.text
+            // Переставляем цвет текста и фон на каждый релэйаут
+            tv.setTextColor(textColor.toArgb())
+            tv.setBackgroundColor(backgroundColor.toArgb())
+            // И только потом — текст
+            if (tv.text.toString() != text.text) {
+                tv.text = text.text
+            }
         }
     )
 }

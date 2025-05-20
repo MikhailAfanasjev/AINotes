@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItemDefaults.contentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -49,9 +51,7 @@ fun ChatMessageItem(
     val colorScheme = MaterialTheme.colorScheme
     val bubbleColor = if (isAssistant) colorScheme.onPrimary else colorScheme.primary
     val maxBubbleWidth = LocalConfiguration.current.screenWidthDp.dp * 0.8f
-    val segments = remember(message.content) {
-        MarkdownParser.parseSegments(message.content)
-    }
+    val segments = MarkdownParser.parseSegments(message.content)
 
     Box(
         modifier = Modifier
