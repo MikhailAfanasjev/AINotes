@@ -10,5 +10,6 @@ open class ChatEntity(
     var title: String = "",
     var createdAt: Long = System.currentTimeMillis(),
     var lastMessageAt: Long = System.currentTimeMillis(),
-    var messageCount: Int = 0
+    var messageCount: Int = 0,
+    var isTitleGenerated: Boolean = false // Флаг для отслеживания, был ли заголовок сгенерирован автоматически
 ) : RealmObject()

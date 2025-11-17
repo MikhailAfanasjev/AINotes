@@ -76,6 +76,32 @@ fun SettingsDrawer(
     val chatList by chatListViewModel.chatList.collectAsState()
     val currentChatId by chatListViewModel.currentChatId.collectAsState()
     val isCreatingChat by chatListViewModel.isCreatingChat.collectAsState()
+    val isTitleGenerating by chatViewModel.isTitleGenerating.collectAsState()
+
+    // Обновляем список чатов после генерации заголовка
+    androidx.compose.runtime.LaunchedEffect(isTitleGenerating) {
+        if (!isTitleGenerating) {
+            chatListViewModel.refreshChats()
+        }
+    }
+
+    // Обновляем список чатов при открытии drawer
+    androidx.compose.runtime.LaunchedEffect(isVisible) {
+        if (isVisible) {
+            android.util.Log.d(
+                ">>>SettingsDrawer",
+                "📂 Открыт drawer. CurrentChatId: $currentChatId"
+            )
+            android.util.Log.d(">>>SettingsDrawer", "📋 Список чатов: ${chatList.size} шт.")
+            chatList.forEach { chat ->
+                android.util.Log.d(
+                    ">>>SettingsDrawer",
+                    "  - ${chat.title} (id: ${chat.id}) ${if (chat.id == currentChatId) "✓ ВЫБРАН" else ""}"
+                )
+            }
+            chatListViewModel.refreshChats()
+        }
+    }
 
     // Состояние для сворачивания/разворачивания списка моделей
     var isModelListExpanded by remember { mutableStateOf(false) }
@@ -369,6 +395,7 @@ fun SettingsDrawer(
                             IconButton(
                                 onClick = {
                                     chatListViewModel.createNewChat()
+                                    onDismiss()
                                 },
                                 enabled = !isCreatingChat
                             ) {
@@ -383,8 +410,11 @@ fun SettingsDrawer(
 
                         Spacer(Modifier.height(12.dp))
 
+                        // Фильтруем только чаты с сообщениями
+                        val nonEmptyChats = chatList.filter { it.messageCount > 0 }
+
                         // Список чатов до самого низа экрана
-                        if (chatList.isEmpty()) {
+                        if (nonEmptyChats.isEmpty()) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -403,7 +433,7 @@ fun SettingsDrawer(
                                     .fillMaxWidth()
                                     .weight(1f)
                             ) {
-                                items(chatList) { chat ->
+                                items(nonEmptyChats) { chat ->
                                     ChatListItem(
                                         chat = chat,
                                         isSelected = chat.id == currentChatId,
@@ -414,10 +444,6 @@ fun SettingsDrawer(
                                         },
                                         onDeleteClick = { chatId ->
                                             chatListViewModel.deleteChat(chatId)
-                                            // Если удаляем текущий чат, очищаем его в ChatViewModel
-                                            if (chatId == currentChatId) {
-                                                chatViewModel.setCurrentChatId(null)
-                                            }
                                         },
                                         modifier = Modifier.padding(vertical = 4.dp)
                                     )

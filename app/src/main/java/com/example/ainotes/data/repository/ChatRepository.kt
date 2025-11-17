@@ -113,4 +113,22 @@ class ChatRepository @Inject constructor() {
                 realm.close()
             }
         }
+
+    suspend fun updateChatTitleGenerated(chatId: String, title: String) =
+        withContext(Dispatchers.IO) {
+            val realm = Realm.getDefaultInstance()
+            try {
+                realm.executeTransaction { tx ->
+                    val chat = tx.where(ChatEntity::class.java)
+                        .equalTo("id", chatId)
+                        .findFirst()
+                    if (chat != null) {
+                        chat.title = title
+                        chat.isTitleGenerated = true
+                    }
+                }
+            } finally {
+                realm.close()
+            }
+        }
 }

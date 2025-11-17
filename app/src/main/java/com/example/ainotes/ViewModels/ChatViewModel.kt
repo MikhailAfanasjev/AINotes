@@ -87,6 +87,13 @@ class ChatViewModel @Inject constructor(
     private val _modelInitialized = MutableStateFlow(false)
     val modelInitialized: StateFlow<Boolean> = _modelInitialized.asStateFlow()
 
+    private val _isTitleGenerating = MutableStateFlow(false)
+    val isTitleGenerating: StateFlow<Boolean> = _isTitleGenerating.asStateFlow()
+
+    // Callback для запроса создания нового чата
+    private val _requestNewChat = MutableStateFlow<String?>(null)
+    val requestNewChat: StateFlow<String?> = _requestNewChat.asStateFlow()
+
     init {
         // Consumer for queued messages
         viewModelScope.launch {
@@ -129,7 +136,12 @@ class ChatViewModel @Inject constructor(
 
     fun setCurrentChatId(chatId: String?) {
         _currentChatId.value = chatId
-        chatId?.let { loadMessagesForChat(it) }
+        if (chatId != null) {
+            loadMessagesForChat(chatId)
+        } else {
+            // Очищаем сообщения, если чат не выбран
+            _chatMessages.value = emptyList()
+        }
     }
 
     private fun loadMessagesForChat(chatId: String) {
@@ -210,10 +222,156 @@ class ChatViewModel @Inject constructor(
     }
 
     fun sendMessage(inputText: String) {
-        val currentChatId = _currentChatId.value ?: return
+        val currentChatId = _currentChatId.value
+
+        if (currentChatId == null) {
+            Log.w(TAG, "⚠️ Попытка отправить сообщение без активного чата - запрашиваем создание нового")
+            // Сохраняем сообщение для отправки после создания чата
+            _requestNewChat.value = inputText
+            return
+        }
 
         addMessage(Message(role = "user", content = inputText))
         messageQueue.trySend(inputText)
+
+        // Проверяем, нужно ли генерировать заголовок для чата
+        viewModelScope.launch {
+            val chat = chatEntityRepo.getChatById(currentChatId)
+            if (chat != null && !chat.isTitleGenerated) {
+                // Получаем количество пользовательских сообщений в чате
+                val userMessagesCount = _chatMessages.value.count { it.role == "user" }
+
+                // Генерируем заголовок после первого сообщения пользователя
+                if (userMessagesCount == 1) {
+                    Log.d(TAG, "🎯 Первое сообщение пользователя - запускаем генерацию заголовка")
+                    generateChatTitle(currentChatId, inputText)
+                }
+            }
+        }
+    }
+
+    /**
+     * Сбрасывает запрос на создание нового чата после его обработки
+     */
+    fun clearNewChatRequest() {
+        _requestNewChat.value = null
+    }
+
+    /**
+     * Генерирует краткий заголовок для чата на основе первого сообщения пользователя
+     */
+    private fun generateChatTitle(chatId: String, firstUserMessage: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isTitleGenerating.value = true
+
+            try {
+                Log.d(TAG, "🎯 Начинаем генерацию заголовка для чата: $chatId")
+
+                // Создаем специальный промпт для генерации заголовка
+                val titlePrompt = """
+                    Сгенерируй короткий, ёмкий заголовок для чата на основе следующего сообщения пользователя.
+                    
+                    Правила:
+                    - Заголовок должен быть коротким (максимум 5-7 слов)
+                    - Отражать основную тему или задачу из сообщения
+                    - Не использовать лишние детали, эмоции или длинные фразы
+                    - Избегать бесполезных заголовков вроде «Помоги», «Вопрос», «Привет»
+                    - Если тема непонятна, выбрать наиболее сильную по смыслу часть
+                    - Отвечать ТОЛЬКО заголовком, без дополнительных комментариев
+                    
+                    Сообщение пользователя: "$firstUserMessage"
+                    
+                    Заголовок:
+                """.trimIndent()
+
+                val titleMessages = listOf(
+                    Message(
+                        "system",
+                        "Ты помощник, который генерирует краткие заголовки для чатов."
+                    ),
+                    Message("user", titlePrompt)
+                )
+
+                val titleRequest = ChatGPTRequest(
+                    model = _selectedModel.value,
+                    messages = titleMessages,
+                    stream = true
+                )
+
+                val titleCall = api.sendChatMessageCall(titleRequest)
+                val gson = Gson()
+                val titleBuilder = StringBuilder()
+
+                titleCall.enqueue(object : Callback<ResponseBody> {
+                    override fun onResponse(
+                        call: Call<ResponseBody>,
+                        response: Response<ResponseBody>
+                    ) {
+                        if (response.isSuccessful) {
+                            response.body()?.source()?.let { source ->
+                                viewModelScope.launch(Dispatchers.IO) {
+                                    try {
+                                        // Читаем стрим для получения заголовка
+                                        while (!source.exhausted()) {
+                                            val line = source.readUtf8Line().orEmpty()
+                                            if (line.trim() == "data: [DONE]") break
+
+                                            if (line.startsWith("data:")) {
+                                                val jsonLine = line.removePrefix("data:").trim()
+                                                val chunk = runCatching {
+                                                    gson.fromJson(jsonLine, JsonObject::class.java)
+                                                        .getAsJsonArray("choices")[0]
+                                                        .asJsonObject["delta"].asJsonObject
+                                                        .get("content")?.asString.orEmpty()
+                                                }.getOrNull().orEmpty()
+
+                                                if (chunk.isNotEmpty()) {
+                                                    titleBuilder.append(chunk)
+                                                }
+                                            }
+                                        }
+
+                                        // Очищаем заголовок от лишних символов и обрезаем
+                                        val generatedTitle = titleBuilder.toString()
+                                            .trim()
+                                            .replace(Regex("[\"'«»]"), "") // Убираем кавычки
+                                            .replace(Regex("\\s+"), " ") // Нормализуем пробелы
+                                            .take(60) // Ограничиваем длину
+                                            .ifEmpty { "Новый чат" }
+
+                                        Log.d(TAG, "✅ Сгенерирован заголовок: $generatedTitle")
+
+                                        // Обновляем заголовок в базе данных
+                                        chatEntityRepo.updateChatTitleGenerated(
+                                            chatId,
+                                            generatedTitle
+                                        )
+
+                                        _isTitleGenerating.value = false
+
+                                    } catch (e: IOException) {
+                                        Log.e(TAG, "❌ Ошибка при чтении стрима заголовка", e)
+                                        _isTitleGenerating.value = false
+                                    }
+                                }
+                            }
+                        } else {
+                            Log.w(TAG, "⚠️ Ошибка генерации заголовка: ${response.code()}")
+                            _isTitleGenerating.value = false
+                        }
+                    }
+
+                    override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
+                        Log.e(TAG, "❌ Исключение при генерации заголовка", t)
+                        _isTitleGenerating.value = false
+                    }
+                })
+
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Общее исключение при генерации заголовка", e)
+                _isTitleGenerating.value = false
+            }
+        }
     }
 
     fun stopGeneration() {

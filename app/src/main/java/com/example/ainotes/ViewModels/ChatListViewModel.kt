@@ -1,5 +1,6 @@
 package com.example.ainotes.viewModels
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ainotes.data.local.entity.ChatEntity
@@ -16,6 +17,10 @@ class ChatListViewModel @Inject constructor(
     private val chatRepository: ChatRepository
 ) : ViewModel() {
 
+    companion object {
+        private const val TAG = ">>>ChatListViewModel"
+    }
+
     private val _chatList = MutableStateFlow<List<ChatEntity>>(emptyList())
     val chatList: StateFlow<List<ChatEntity>> = _chatList.asStateFlow()
 
@@ -25,25 +30,42 @@ class ChatListViewModel @Inject constructor(
     private val _isCreatingChat = MutableStateFlow(false)
     val isCreatingChat: StateFlow<Boolean> = _isCreatingChat.asStateFlow()
 
+    private val _isChatsLoaded = MutableStateFlow(false)
+    val isChatsLoaded: StateFlow<Boolean> = _isChatsLoaded.asStateFlow()
+
     init {
+        Log.d(TAG, "🚀 ChatListViewModel инициализирован")
         loadChats()
     }
 
     fun loadChats() {
         viewModelScope.launch {
-            _chatList.value = chatRepository.getAllChats()
+            val chats = chatRepository.getAllChats()
+            Log.d(TAG, "📋 Загружено чатов: ${chats.size}")
+            chats.forEach { chat ->
+                Log.d(TAG, "  - ${chat.title} (id: ${chat.id})")
+            }
+            _chatList.value = chats
+            _isChatsLoaded.value = true
         }
     }
 
-    fun createNewChat(title: String = "Новый чат") {
+    fun createNewChat() {
+        Log.d(TAG, "➕ Начинаем создание нового чата")
         _isCreatingChat.value = true
         viewModelScope.launch {
             try {
-                val chat = chatRepository.createChat(generateChatTitle())
+                // Все чаты создаются с временным названием "Новый чат"
+                // которое будет заменено после первого сообщения пользователя
+                val chat = chatRepository.createChat("Новый чат")
+                Log.d(TAG, "✅ Чат создан: ${chat.title} (id: ${chat.id})")
                 _currentChatId.value = chat.id
-                loadChats()
+                // Немедленно обновляем список чатов
+                val updatedChats = chatRepository.getAllChats()
+                Log.d(TAG, "🔄 Обновлен список чатов, теперь: ${updatedChats.size}")
+                _chatList.value = updatedChats
             } catch (e: Exception) {
-                // Handle error
+                Log.e(TAG, "❌ Ошибка создания чата", e)
             } finally {
                 _isCreatingChat.value = false
             }
@@ -51,52 +73,52 @@ class ChatListViewModel @Inject constructor(
     }
 
     fun selectChat(chatId: String) {
+        Log.d(TAG, "🎯 Выбран чат с ID: $chatId")
         _currentChatId.value = chatId
     }
 
     fun deleteChat(chatId: String) {
         viewModelScope.launch {
+            Log.d(TAG, "🗑️ Удаление чата: $chatId")
             chatRepository.deleteChat(chatId)
+
+            // Обновляем список чатов
+            val remainingChats = chatRepository.getAllChats()
+            _chatList.value = remainingChats
+
+            // Если удаляем текущий чат, сбрасываем currentChatId
+            // Это позволит ChatViewModel очистить сообщения
             if (_currentChatId.value == chatId) {
-                // Если удаляем текущий чат, выбираем первый доступный или null
-                val remainingChats = chatRepository.getAllChats()
-                _currentChatId.value = remainingChats.firstOrNull()?.id
+                Log.d(TAG, "🧹 Удален текущий чат, сбрасываем currentChatId")
+                _currentChatId.value = null
             }
-            loadChats()
         }
     }
 
     fun updateChatTitle(chatId: String, newTitle: String) {
         viewModelScope.launch {
             chatRepository.updateChatTitle(chatId, newTitle)
-            loadChats()
+            // Немедленно обновляем список чатов
+            _chatList.value = chatRepository.getAllChats()
         }
     }
 
     fun updateChatLastMessage(chatId: String) {
         viewModelScope.launch {
             chatRepository.updateChatLastMessage(chatId)
-            loadChats()
+            // Немедленно обновляем список чатов
+            _chatList.value = chatRepository.getAllChats()
         }
     }
 
-    private fun generateChatTitle(): String {
-        // Находим все существующие номера чатов
-        val existingNumbers = _chatList.value
-            .mapNotNull { chat ->
-                // Извлекаем номер из названия чата (например, "Чат 5" -> 5)
-                val regex = Regex("Чат (\\d+)")
-                regex.find(chat.title)?.groupValues?.get(1)?.toIntOrNull()
-            }
-            .toSet()
-
-        // Находим первый свободный номер, начиная с 1
-        var nextNumber = 1
-        while (existingNumbers.contains(nextNumber)) {
-            nextNumber++
+    fun refreshChats() {
+        Log.d(TAG, "🔄 Запрос на обновление списка чатов")
+        viewModelScope.launch {
+            val chats = chatRepository.getAllChats()
+            Log.d(TAG, "📋 Обновлено чатов: ${chats.size}")
+            _chatList.value = chats
+            _isChatsLoaded.value = true
         }
-
-        return "Чат $nextNumber"
     }
 
     fun getCurrentChat(): ChatEntity? {

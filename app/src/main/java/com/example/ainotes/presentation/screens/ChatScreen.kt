@@ -64,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import android.util.Log
 import com.example.ainotes.presentation.components.ChatMessageItem
 import com.example.ainotes.presentation.components.FilterChip
 import com.example.ainotes.utils.scrollToBottomWithOverflow
@@ -96,28 +97,89 @@ fun ChatScreen(
     // Состояния для управления чатами
     val currentChatId by chatListViewModel.currentChatId.collectAsState()
     val chatList by chatListViewModel.chatList.collectAsState()
+    val isCreatingChat by chatListViewModel.isCreatingChat.collectAsState()
+    val isChatsLoaded by chatListViewModel.isChatsLoaded.collectAsState()
 
     // Инициализация первого чата при запуске, если нет активного чата
-    LaunchedEffect(Unit) {
-        if (currentChatId == null) {
-            if (chatList.isEmpty()) {
-                // Создаем первый чат, если список пуст
-                chatListViewModel.createNewChat()
-            } else {
-                // Выбираем первый чат из списка
+    // Используем флаг для отслеживания, был ли уже выполнен начальный запуск
+    val hasInitialized = remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentChatId, chatList.size, isChatsLoaded) {
+        // Ждем, пока чаты загрузятся из БД
+        if (!isChatsLoaded) {
+            Log.d(">>>ChatScreen", "⏳ Ожидание загрузки чатов из БД...")
+            return@LaunchedEffect
+        }
+
+        // Выполняем инициализацию только один раз при первом запуске
+        if (!hasInitialized.value) {
+            if (currentChatId == null && chatList.isNotEmpty()) {
+                // Если чаты есть, но нет выбранного - выбираем первый
                 val firstChatId = chatList.first().id
+                Log.d(
+                    ">>>ChatScreen",
+                    "📱 Выбираем существующий чат: ${chatList.first().title} (id: $firstChatId)"
+                )
                 chatListViewModel.selectChat(firstChatId)
-                chatViewModel.setCurrentChatId(firstChatId)
+                // Синхронизация с ChatViewModel произойдет автоматически через LaunchedEffect(currentChatId)
+            } else if (currentChatId == null && chatList.isEmpty() && !isCreatingChat) {
+                // Создаем первый чат только если:
+                // 1. Нет текущего активного чата
+                // 2. Список чатов полностью пуст (и загружен из БД!)
+                // 3. Не идёт процесс создания чата (чтобы избежать дублирования)
+                Log.d(
+                    ">>>ChatScreen",
+                    "➕ Список чатов пуст после загрузки из БД, создаем новый чат"
+                )
+                chatListViewModel.createNewChat()
             }
-        } else {
-            // Обновляем ChatViewModel с текущим чатом
-            chatViewModel.setCurrentChatId(currentChatId)
+            hasInitialized.value = true
         }
     }
 
     // Синхронизируем выбранный чат между ViewModel'ами
     LaunchedEffect(currentChatId) {
-        chatViewModel.setCurrentChatId(currentChatId)
+        if (currentChatId != null) {
+            Log.d(
+                ">>>ChatScreen",
+                "🔄 Синхронизация: устанавливаем currentChatId = $currentChatId в ChatViewModel"
+            )
+            chatViewModel.setCurrentChatId(currentChatId)
+        } else {
+            Log.d(
+                ">>>ChatScreen",
+                "🧹 Синхронизация: сбрасываем currentChatId в ChatViewModel (очищаем сообщения)"
+            )
+            chatViewModel.setCurrentChatId(null)
+        }
+    }
+
+    // Обработка запроса на создание нового чата при отправке сообщения
+    val requestNewChat by chatViewModel.requestNewChat.collectAsState()
+    LaunchedEffect(requestNewChat) {
+        requestNewChat?.let { messageText ->
+            Log.d(">>>ChatScreen", "📩 Получен запрос на создание чата для сообщения: $messageText")
+            // Создаем новый чат
+            chatListViewModel.createNewChat()
+
+            // Ждем, пока чат создастся и установится как текущий
+            var attempts = 0
+            while (currentChatId == null && attempts < 20) {
+                kotlinx.coroutines.delay(50)
+                attempts++
+            }
+
+            if (currentChatId != null) {
+                Log.d(">>>ChatScreen", "✅ Чат создан, отправляем сообщение")
+                // Сбрасываем запрос перед отправкой
+                chatViewModel.clearNewChatRequest()
+                // Отправляем сообщение в новый чат
+                chatViewModel.sendMessage(messageText)
+            } else {
+                Log.e(">>>ChatScreen", "❌ Не удалось создать чат за отведенное время")
+                chatViewModel.clearNewChatRequest()
+            }
+        }
     }
 
     val isAtBottom by remember {
@@ -187,16 +249,35 @@ fun ChatScreen(
 
     // Проверяем, есть ли активный чат перед отображением интерфейса
     if (currentChatId == null) {
-        // Показываем индикатор загрузки или пустой экран
+        // Показываем сообщение в зависимости от состояния
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "Загрузка чата...",
-                style = MaterialTheme.typography.bodyLarge,
-                color = colorScheme.onBackground
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(16.dp)
+            ) {
+                if (!isChatsLoaded || isCreatingChat) {
+                    Text(
+                        text = "Загрузка чата...",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = colorScheme.onBackground
+                    )
+                } else {
+                    Text(
+                        text = "Нет активного чата",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = colorScheme.onBackground
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Откройте меню настроек, чтобы создать новый чат",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colorScheme.onBackground.copy(alpha = 0.7f)
+                    )
+                }
+            }
         }
         return
     }
