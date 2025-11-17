@@ -7,6 +7,7 @@ import java.util.UUID
 open class ChatMessageEntity(
     @PrimaryKey
     var id: String = UUID.randomUUID().toString(),
+    var chatId: String = "", // ID чата, к которому принадлежит сообщение
     var role: String = "", // "user" или "assistant"
     var contentRaw: String = "",
     var timestamp: Long = System.currentTimeMillis(),

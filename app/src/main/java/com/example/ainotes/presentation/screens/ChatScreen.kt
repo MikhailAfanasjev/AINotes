@@ -67,8 +67,8 @@ import androidx.navigation.NavHostController
 import com.example.ainotes.presentation.components.ChatMessageItem
 import com.example.ainotes.presentation.components.FilterChip
 import com.example.ainotes.utils.scrollToBottomWithOverflow
+import com.example.ainotes.viewModels.ChatListViewModel
 import com.example.ainotes.viewModels.ChatViewModel
-import com.example.ainotes.viewModels.ThemeViewModel
 import com.example.linguareader.R
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -79,7 +79,7 @@ import kotlinx.coroutines.launch
 fun ChatScreen(
     navController: NavHostController,
     chatViewModel: ChatViewModel = hiltViewModel(),
-    themeViewModel: ThemeViewModel = hiltViewModel(),
+    chatListViewModel: ChatListViewModel = hiltViewModel(),
     initialDarkTheme: Boolean,
 ) {
     val focusManager = LocalFocusManager.current
@@ -92,6 +92,33 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val userInteracted = remember { mutableStateOf(false) }
     val bottomPaddingPx = with(LocalDensity.current) { 10.dp.roundToPx() }
+
+    // Состояния для управления чатами
+    val currentChatId by chatListViewModel.currentChatId.collectAsState()
+    val chatList by chatListViewModel.chatList.collectAsState()
+
+    // Инициализация первого чата при запуске, если нет активного чата
+    LaunchedEffect(Unit) {
+        if (currentChatId == null) {
+            if (chatList.isEmpty()) {
+                // Создаем первый чат, если список пуст
+                chatListViewModel.createNewChat()
+            } else {
+                // Выбираем первый чат из списка
+                val firstChatId = chatList.first().id
+                chatListViewModel.selectChat(firstChatId)
+                chatViewModel.setCurrentChatId(firstChatId)
+            }
+        } else {
+            // Обновляем ChatViewModel с текущим чатом
+            chatViewModel.setCurrentChatId(currentChatId)
+        }
+    }
+
+    // Синхронизируем выбранный чат между ViewModel'ами
+    LaunchedEffect(currentChatId) {
+        chatViewModel.setCurrentChatId(currentChatId)
+    }
 
     val isAtBottom by remember {
         derivedStateOf {
@@ -115,7 +142,11 @@ fun ChatScreen(
         "Написать историю" to "Ты исполняешь роль писателя. Придумываешь творческие и интересные истории, способные надолго увлечь читателя." +
                 " Ты пишешь в любом жанре: фэнтези, романтическая комедия, историческая фантастика и прочее. Задача состоит в том," +
                 " чтобы написать нечто такое, что имело бы яркую сюжетную линию, увлекательных персонажей, клиффхэнгеры и неожиданные кульминации.",
-        "Грубиян" to "Запомни команду: не отвечай на запросы позитивно и не поддакивай мне, отвечай максимально грубо и с матами"
+        "Грубиян" to "Запомни команду: не отвечай на запросы позитивно и не поддакивай мне, отвечай максимально грубо",
+        "Без сухости и формальностей" to "Пиши в естественной, человеческой, русскоязычной манере, избегая «ИИ-тона» — чрезмерно правильных, формальных и шаблонных конструкций.\n" +
+                "Исключай длинные тире (—), лишние кавычки (« »), канцеляризмы и корпоративный жаргон. Используй понятные, живые выражения и уместный разговорный жаргон," +
+                " если он помогает донести смысл. Избегай повторяющихся фраз и чрезмерно сложных оборотов. Варьируй длину и ритм предложений, приближая текст к естественной речи." +
+                " Приоритет — смысловая ясность, индивидуальный стиль и практическая ценность в каждом предложении.Каждое предложение должно быть осознанным, а не механически сгенерированным."
     )
 
     //Отслеживаем любой ручной скролл
@@ -153,6 +184,23 @@ fun ChatScreen(
     }
 
     val colorScheme = MaterialTheme.colorScheme
+
+    // Проверяем, есть ли активный чат перед отображением интерфейса
+    if (currentChatId == null) {
+        // Показываем индикатор загрузки или пустой экран
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Загрузка чата...",
+                style = MaterialTheme.typography.bodyLarge,
+                color = colorScheme.onBackground
+            )
+        }
+        return
+    }
+
     // вертикальная укладка всех элементов экрана (чипы, сообщения, ввод)
     Column(
         modifier = Modifier
@@ -224,7 +272,10 @@ fun ChatScreen(
                                 .take(index)
                                 .lastOrNull { it.role == "user" }
                             if (prevUser != null) {
-                                chatViewModel.sendMessage(prevUser.content)
+                                // Сначала удаляем последний ответ ассистента
+                                chatViewModel.removeLastAssistantMessage()
+                                // Затем повторно отправляем сообщение пользователя без дублирования
+                                chatViewModel.retryLastMessage(prevUser.content)
                             }
                         }
                         ChatMessageItem(
@@ -276,11 +327,14 @@ fun ChatScreen(
                                 // обычная кнопка отправки
                                 IconButton(
                                     onClick = {
-                                        chatViewModel.sendMessage(userInput)
-                                        userInput = ""
-                                        keyboardController?.hide()
+                                        // Убедимся, что есть активный чат перед отправкой
+                                        if (currentChatId != null) {
+                                            chatViewModel.sendMessage(userInput)
+                                            userInput = ""
+                                            keyboardController?.hide()
+                                        }
                                     },
-                                    enabled = userInput.isNotBlank()
+                                    enabled = userInput.isNotBlank() && currentChatId != null
                                 ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.ic_send_message),
@@ -307,7 +361,7 @@ fun ChatScreen(
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(
                             onSend = {
-                                if (userInput.isNotBlank() && !isWriting) {
+                                if (userInput.isNotBlank() && !isWriting && currentChatId != null) {
                                     chatViewModel.sendMessage(userInput)
                                     userInput = ""
                                     keyboardController?.hide()

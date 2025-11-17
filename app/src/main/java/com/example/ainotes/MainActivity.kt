@@ -3,8 +3,7 @@ package com.example.ainotes
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.viewModels
-import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -26,26 +25,14 @@ import com.example.ainotes.presentation.ui.theme.AiNotesTheme
 import com.example.ainotes.utils.dataStore
 import com.example.ainotes.viewModels.ChatViewModel
 import com.example.ainotes.viewModels.NotesViewModel
-import com.example.ainotes.viewModels.ThemeViewModel
 import com.example.linguareader.R
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    private val themeViewModel: ThemeViewModel by viewModels()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
-
-        val initialDarkTheme: Boolean = runBlocking {
-            dataStore.data
-                .map { prefs -> prefs[ThemeViewModel.IS_DARK_THEME] ?: false }
-                .first()
-        }
 
         super.onCreate(savedInstanceState)
         var isContentReady = false
@@ -55,7 +42,8 @@ class MainActivity : ComponentActivity() {
         ApiKeyHelper.init(this)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent {
-            val isDarkTheme by themeViewModel.isDarkTheme.collectAsState(initial = initialDarkTheme)
+            // Используем системную тему
+            val isDarkTheme = isSystemInDarkTheme()
 
             AiNotesTheme(darkTheme = isDarkTheme) {
                 val colors = MaterialTheme.colorScheme
@@ -86,8 +74,7 @@ class MainActivity : ComponentActivity() {
                                 navController = navController,
                                 chatViewModel = chatViewModel,
                                 chatMessages = chatMessages,
-                                notesViewModel = notesViewModel,
-                                themeViewModel = themeViewModel
+                                notesViewModel = notesViewModel
                             )
                         }
                     }
@@ -97,8 +84,7 @@ class MainActivity : ComponentActivity() {
                         modifier           = Modifier.padding(innerPadding),
                         chatViewModel      = chatViewModel,
                         notesViewModel     = notesViewModel,
-                        themeViewModel     = themeViewModel,
-                        initialDarkTheme   = initialDarkTheme
+                        initialDarkTheme = isDarkTheme
                     )
                 }
 

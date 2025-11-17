@@ -18,7 +18,6 @@ import com.example.ainotes.presentation.screens.AddEditNoteScreen
 import com.example.ainotes.presentation.screens.ChatScreen
 import com.example.ainotes.presentation.screens.NoteScreen
 import com.example.ainotes.utils.LocalNavigationController
-import com.example.ainotes.viewModels.ThemeViewModel
 
 @Composable
 fun NavGraph(
@@ -26,7 +25,6 @@ fun NavGraph(
     modifier: Modifier = Modifier,
     chatViewModel: ChatViewModel = hiltViewModel(),
     notesViewModel: NotesViewModel = hiltViewModel(),
-    themeViewModel: ThemeViewModel = hiltViewModel(),
     initialDarkTheme: Boolean
 ) {
     CompositionLocalProvider(LocalNavigationController provides navController) {
@@ -43,7 +41,6 @@ fun NavGraph(
                     ChatScreen(
                         navController = navController,
                         chatViewModel = chatViewModel,
-                        themeViewModel = themeViewModel,
                         initialDarkTheme = initialDarkTheme
                     )
                 }

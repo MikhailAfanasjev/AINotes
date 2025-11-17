@@ -9,12 +9,12 @@ plugins {
 
 android {
     namespace = "com.example.linguareader"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.linguareader"
         minSdk = 29
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
@@ -39,6 +39,7 @@ android {
     }
     kotlinOptions {
         jvmTarget = "1.8"
+        freeCompilerArgs = listOf("-XXLanguage:+PropertyParamAnnotationDefaultTargetMode")
     }
     buildFeatures {
         compose = true
@@ -67,7 +68,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)  // Жизненный цикл KTX
     implementation(libs.androidx.activity.compose)  // Поддержка компонентов Activity для Compose
     implementation(libs.androidx.constraintlayout.compose)
-    //implementation(libs.textflow.material3)
     implementation(platform(libs.androidx.compose.bom))  // BOM для управления версиями Compose
     implementation(libs.androidx.ui)  // Основной модуль Compose UI
     implementation(libs.androidx.ui.graphics)  // Библиотека графики Compose
@@ -95,14 +95,18 @@ dependencies {
     //Realm
     implementation (libs.realm.android.library)
 
+    //Room
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.ui.test.android)
+    kapt(libs.androidx.room.compiler)
+    implementation(libs.androidx.room.ktx)
+
     // PdfRenderer
-    // https://github.com/TomRoush/PdfBox-Android
     implementation(libs.pdfbox.android)
-    //  implementation("com.gemalto.jp2:jp2-android:1.0.3")
 
     implementation(libs.hilt.android.v252)
-    implementation ("androidx.datastore:datastore-preferences:1.1.4")    // ↓ см. примечание
-    implementation ("androidx.datastore:datastore-core-android:1.1.4")  // для core‑API
+    implementation (libs.androidx.datastore.preferences)    // ↓ см. примечание
+    implementation (libs.androidx.datastore.core.android)  // для core‑API
     kapt (libs.dagger.hilt.android.compiler)
     kapt(libs.hilt.compiler.v252)
     // Gson

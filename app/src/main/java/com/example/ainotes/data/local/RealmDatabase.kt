@@ -14,7 +14,7 @@ object RealmHelper {
         val config = getDefaultModule()?.let {
             RealmConfiguration.Builder()
                 .name("notes.realm")
-                .schemaVersion(1)
+                .schemaVersion(2) // Увеличиваем версию схемы для новых сущностей
                 .deleteRealmIfMigrationNeeded()
                 .modules(it)
                 .build()

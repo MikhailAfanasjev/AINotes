@@ -23,6 +23,20 @@ class ChatMessageRepository @Inject constructor() {
             }
         }
 
+    suspend fun getMessagesByChatId(chatId: String): List<ChatMessageEntity> =
+        withContext(Dispatchers.IO) {
+            val realm = Realm.getDefaultInstance()
+            try {
+                val results = realm.where(ChatMessageEntity::class.java)
+                    .equalTo("chatId", chatId)
+                    .sort("timestamp")
+                    .findAll()
+                realm.copyFromRealm(results)
+            } finally {
+                realm.close()
+            }
+        }
+
     suspend fun addMessage(entity: ChatMessageEntity) =
         withContext(Dispatchers.IO) {
             val realm = Realm.getDefaultInstance()
@@ -43,6 +57,38 @@ class ChatMessageRepository @Inject constructor() {
                     tx.where(ChatMessageEntity::class.java)
                         .findAll()
                         .deleteAllFromRealm()
+                }
+            } finally {
+                realm.close()
+            }
+        }
+
+    suspend fun deleteMessagesByChatId(chatId: String) =
+        withContext(Dispatchers.IO) {
+            val realm = Realm.getDefaultInstance()
+            try {
+                realm.executeTransaction { tx ->
+                    tx.where(ChatMessageEntity::class.java)
+                        .equalTo("chatId", chatId)
+                        .findAll()
+                        .deleteAllFromRealm()
+                }
+            } finally {
+                realm.close()
+            }
+        }
+
+    suspend fun deleteMessage(entity: ChatMessageEntity) =
+        withContext(Dispatchers.IO) {
+            val realm = Realm.getDefaultInstance()
+            try {
+                realm.executeTransaction { tx ->
+                    val messageToDelete = tx.where(ChatMessageEntity::class.java)
+                        .equalTo("timestamp", entity.timestamp)
+                        .equalTo("role", entity.role)
+                        .equalTo("chatId", entity.chatId)
+                        .findFirst()
+                    messageToDelete?.deleteFromRealm()
                 }
             } finally {
                 realm.close()

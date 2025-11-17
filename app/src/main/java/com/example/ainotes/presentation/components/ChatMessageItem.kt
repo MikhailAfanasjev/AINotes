@@ -1,6 +1,12 @@
 package com.example.ainotes.presentation.components
 
+import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.os.Build
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,17 +30,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.ainotes.chatGPT.Message
-import com.example.ainotes.utils.MarkdownParser
-import com.example.ainotes.utils.MessageSegment
 import com.example.ainotes.viewModels.ChatViewModel
 import com.example.linguareader.R
-import androidx.compose.ui.platform.LocalContext
 
+@SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 fun ChatMessageItem(
     chatViewModel: ChatViewModel = hiltViewModel(),
@@ -53,11 +57,10 @@ fun ChatMessageItem(
     val colorScheme = MaterialTheme.colorScheme
     val bubbleColor = if (isAssistant) colorScheme.onPrimary else colorScheme.primary
     val maxBubbleWidth = LocalConfiguration.current.screenWidthDp.dp * 0.8f
-    val segments = MarkdownParser.parseSegments(message.content)
     val context = LocalContext.current
 
     // Менеджер буфера обмена
-    val clipboardManager = LocalClipboardManager.current
+    LocalClipboardManager.current
 
     Box(
         modifier = Modifier
@@ -84,27 +87,12 @@ fun ChatMessageItem(
                 if (showTyping) TypingIndicator(bubbleColor = bubbleColor, contentColor = colorScheme.onSecondary)
 
                 if (message.content.isNotBlank()) {
-                    segments.forEach { segment ->
-                        when (segment) {
-                            is MessageSegment.Text -> {
-                                NoteSelectionContainer(
-                                    text = AnnotatedString(segment.content),
-                                    onCreateNote = onCreateNote,
-                                    textColor = colorScheme.onSecondary,
-                                    backgroundColor = Color.Transparent,
-                                )
-                            }
-                            is MessageSegment.Code -> {
-                                NoteSelectionContainer(
-                                    text = AnnotatedString(segment.content),
-                                    onCreateNote = onCreateNote,
-                                    textColor = colorScheme.onSecondary,
-                                    backgroundColor = colorScheme.primaryContainer,
-                                    isCode = true,
-                                )
-                            }
-                        }
-                    }
+                    FormattedText(
+                        text = message.content,
+                        textColor = colorScheme.onSecondary,
+                        modifier = Modifier.fillMaxWidth(),
+                        onCreateNote = onCreateNote
+                    )
                 }
 
                 if (isAssistant && message.isComplete && message.content.isNotBlank()) {
@@ -115,10 +103,30 @@ fun ChatMessageItem(
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Создать заметку
+                        IconButton(
+                            onClick = {
+                                onCreateNote(message.content)
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_notes),
+                                contentDescription = "Создать заметку",
+                                modifier = Modifier.size(16.dp),
+                                tint = colorScheme.onSecondary
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
                         // Копирование с уведомлением
                         IconButton(
                             onClick = {
-                                clipboardManager.setText(AnnotatedString(message.content))
+                                val clip = ClipData.newPlainText("simple text", message.content)
+                                (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(
+                                    clip
+                                )
                                 Toast
                                     .makeText(context, "Текст скопирован", Toast.LENGTH_SHORT)
                                     .show()

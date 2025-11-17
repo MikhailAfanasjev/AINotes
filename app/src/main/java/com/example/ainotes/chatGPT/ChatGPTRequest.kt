@@ -1,7 +1,5 @@
 package com.example.ainotes.chatGPT
 
-import androidx.compose.ui.text.AnnotatedString
-
 data class ChatGPTRequest(
     val model: String,
     val messages: List<Message>,

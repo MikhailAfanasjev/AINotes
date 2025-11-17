@@ -1,7 +1,6 @@
 package com.example.ainotes.presentation.navigation
 
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
+import android.annotation.SuppressLint
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,18 +11,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -38,13 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -53,256 +39,180 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.ainotes.chatGPT.Message
 import com.example.ainotes.viewModels.ChatViewModel
 import com.example.ainotes.viewModels.NotesViewModel
-import com.example.ainotes.viewModels.ThemeViewModel
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import com.example.linguareader.R
+import androidx.compose.ui.graphics.Color
+import com.example.ainotes.presentation.components.SettingsDrawer
 
+@SuppressLint("ConfigurationScreenWidthHeight")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopBar(
     navController: NavController,
     chatViewModel: ChatViewModel = hiltViewModel(),
     chatMessages: List<Message>,
-    notesViewModel: NotesViewModel = hiltViewModel(),
-    themeViewModel: ThemeViewModel = hiltViewModel()
+    notesViewModel: NotesViewModel = hiltViewModel()
 ) {
     val iconSize = 24.dp
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route?.substringBefore("/") ?: ""
-    val notes by notesViewModel.notes.collectAsState()
-    var showMenu by remember { mutableStateOf(false) }
-    var showModelMenu by remember { mutableStateOf(false) }
-    val selectedModel by chatViewModel.selectedModel.collectAsState()
-    val models = chatViewModel.availableModels
-
-    var menuBounds by remember { mutableStateOf<Rect?>(null) }
-    var modelItemBounds by remember { mutableStateOf<Rect?>(null) }
+    val notes by notesViewModel.notes.collectAsState(emptyList())
+    var showSettingsDrawer by remember { mutableStateOf(false) }
+    val isModelInitializing by chatViewModel.isModelInitializing.collectAsState()
+    val modelInitialized by chatViewModel.modelInitialized.collectAsState()
 
     val configuration = LocalConfiguration.current
     val screenWidthDp = configuration.screenWidthDp.dp
-    val dynamicSpacing = screenWidthDp * 0.2f
+
+    val minSpacing = 8.dp
+    val maxSpacing = (screenWidthDp.value * 0.15f).dp
+    val dynamicSpacing = when {
+        screenWidthDp < 360.dp -> minSpacing
+        screenWidthDp < 480.dp -> (screenWidthDp.value * 0.08f).dp
+        screenWidthDp < 720.dp -> (screenWidthDp.value * 0.12f).dp
+        else -> maxSpacing
+    }
+
+    val isSmallScreen = screenWidthDp < 400.dp
+    val adaptiveIconPadding = if (isSmallScreen) 4.dp else 8.dp
 
     val colorScheme = MaterialTheme.colorScheme
 
     CompositionLocalProvider(LocalRippleConfiguration provides null) {
-        Column(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            TopAppBar(
-                title = { /* пусто */ },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(96.dp)
-                    .drawWithContent {
-                        drawContent()
-                    },
-                navigationIcon = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .padding(end = 8.dp)
-                        )
-
+        Box {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                TopAppBar(
+                    title = { /* пусто */ },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(96.dp)
+                        .drawWithContent {
+                            drawContent()
+                        },
+                    navigationIcon = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clickable { navController.navigate("chat") }
-                                .padding(end = 12.dp)
+                            modifier = Modifier.fillMaxWidth(0.85f)
                         ) {
                             Icon(
-                                painter = painterResource(id = R.drawable.ic_chat),
-                                contentDescription = "Чат",
-                                tint = if (currentRoute == "chat") colorScheme.onTertiary else colorScheme.tertiary, // активный/неактивный
-                                modifier = Modifier.size(iconSize)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = "Чат",
-                                color = if (currentRoute == "chat") colorScheme.onTertiary else colorScheme.tertiary, // активный/неактивный
-                                fontSize = 20.sp
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(dynamicSpacing))
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clickable { navController.navigate("notes") }
-                                .padding(end = 8.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_notes),
-                                contentDescription = "Заметки",
-                                tint = if (currentRoute == "notes") colorScheme.onTertiary else colorScheme.tertiary, // активный/неактивный
-                                modifier = Modifier.size(iconSize)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = "Заметки",
-                                color = if (currentRoute == "notes") colorScheme.onTertiary else colorScheme.tertiary, // активный/неактивный
-                                fontSize = 20.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(dynamicSpacing))
-                    }
-                },
-                actions = {
-                    Box {
-                        IconButton(onClick = { showMenu = true }) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "Больше",
-                                modifier = Modifier.size(iconSize),
-                                tint = colorScheme.tertiary
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = {
-                                showMenu = false
-                                showModelMenu = false
-                            },
-                            modifier = Modifier
-                                .onGloballyPositioned { coords -> menuBounds = coords.boundsInWindow() }
-                                .width(200.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            // ← Задаём фон меню secondary
-                            containerColor = colorScheme.background
-                        ) {
-                            DropdownMenuItem(
+                                painter = painterResource(id = R.drawable.ic_settings),
+                                contentDescription = "Настройки",
                                 modifier = Modifier
-                                    .onGloballyPositioned { coords -> modelItemBounds = coords.boundsInWindow() }
-                                    .background(if (showModelMenu) colorScheme.secondary else colorScheme.background),
-                                leadingIcon = {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_model_selection),
-                                        contentDescription = null,
-                                        tint = colorScheme.onSecondary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
-                                text = { Text("Выбор модели", color = colorScheme.onSecondary) },
-                                trailingIcon = {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_more),
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .rotate(if (showModelMenu) 270f else 0f)
-                                            .size(16.dp)
-                                    )
-                                },
-                                onClick = { showModelMenu = true },
+                                    .size(48.dp)
+                                    .padding(end = adaptiveIconPadding)
+                                    .clickable { showSettingsDrawer = true }
                             )
 
-                            DropdownMenuItem(
-                                leadingIcon = {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_light_dark),
-                                        contentDescription = "Переключение темы",
-                                        tint = colorScheme.onSecondary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
-                                text = { Text("Тема", color = colorScheme.onSecondary) },
-                                onClick = {
-                                    themeViewModel.toggleTheme()
-                                    showMenu = false
-                                    showModelMenu = false
-                                }
-                            )
-
-                            if (currentRoute == "chat" && chatMessages.isNotEmpty()) {
-                                DropdownMenuItem(
-                                    leadingIcon = {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_remove),
-                                            contentDescription = "Очистить чат",
-                                            tint = colorScheme.onSurface, // цвет иконки удаления
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    },
-                                    text = { Text("Очистить чат", color = colorScheme.onSurface) }, // цвет текста очистки
-                                    onClick = {
-                                        showMenu = false
-                                        showModelMenu = false
-                                        chatViewModel.clearChat()
-                                    }
-                                )
-                            }
-                            if (currentRoute == "notes" && notes.isNotEmpty()) {
-                                DropdownMenuItem(
-                                    leadingIcon = {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_remove),
-                                            contentDescription = "Удалить заметки",
-                                            tint = colorScheme.onSurface, // цвет иконки удаления
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    },
-                                    text = { Text("Удалить заметки", color = colorScheme.onSurface) }, // цвет текста очистки
-                                    onClick = {
-                                        showMenu = false
-                                        showModelMenu = false
-                                        notesViewModel.deleteAllNotes()
-                                    }
-                                )
-                            }
-                        }
-
-                        if (showModelMenu && menuBounds != null && modelItemBounds != null) {
-                            val offsetDp = with(LocalDensity.current) {
-                                DpOffset(
-                                    x = menuBounds!!.width.toDp(),
-                                    y = (modelItemBounds!!.bottom - menuBounds!!.top).toDp()
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = true,
-                                onDismissRequest = { showModelMenu = false },
-                                offset = offsetDp,
-                                shape = RoundedCornerShape(16.dp),
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
-                                    .width(200.dp)
-                                    .background(colorScheme.background) // фон меню моделей
-
+                                    .clickable { navController.navigate("chat") }
+                                    .padding(end = adaptiveIconPadding)
                             ) {
-                                models.forEach { model ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                RadioButton(
-                                                    selected = model == selectedModel,
-                                                    onClick = {
-                                                        chatViewModel.setModel(model)
-                                                        showModelMenu = false
-                                                    },
-                                                    colors = RadioButtonDefaults.colors(
-                                                        selectedColor = colorScheme.primary,
-                                                        unselectedColor = colorScheme.tertiary
-                                                    )
-                                                )
-                                                Spacer(Modifier.width(8.dp))
-                                                Text(model, color = colorScheme.onSecondary)
-                                            }
-                                        },
-                                        onClick = {
-                                            chatViewModel.setModel(model)
-                                            showModelMenu = false
-                                        }
-                                    )
-                                }
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_chat),
+                                    contentDescription = "Чат",
+                                    tint = if (currentRoute == "chat") colorScheme.onTertiary else colorScheme.tertiary,
+                                    modifier = Modifier.size(iconSize)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = "Чат",
+                                    color = if (currentRoute == "chat") colorScheme.onTertiary else colorScheme.tertiary,
+                                    fontSize = 20.sp
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(dynamicSpacing))
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clickable { navController.navigate("notes") }
+                                    .padding(end = adaptiveIconPadding)
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_notes),
+                                    contentDescription = "Заметки",
+                                    tint = if (currentRoute == "notes") colorScheme.onTertiary else colorScheme.tertiary,
+                                    modifier = Modifier.size(iconSize)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = "Заметки",
+                                    color = if (currentRoute == "notes") colorScheme.onTertiary else colorScheme.tertiary,
+                                    fontSize = 20.sp
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    },
+                    actions = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            if (isModelInitializing) {
+                                val infiniteTransition =
+                                    rememberInfiniteTransition(label = "loading_rotation")
+                                val rotationAngle by infiniteTransition.animateFloat(
+                                    initialValue = 0f,
+                                    targetValue = 360f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(1000, easing = LinearEasing),
+                                        repeatMode = RepeatMode.Restart
+                                    ), label = "rotation"
+                                )
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_loading),
+                                    contentDescription = "Загрузка модели",
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .rotate(rotationAngle),
+                                    tint = Color.Unspecified
+                                )
+                            } else if (!modelInitialized) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_error),
+                                    contentDescription = "Ошибка инициализации модели",
+                                    modifier = Modifier
+                                        .size(16.dp),
+                                    tint = Color.Unspecified
+                                )
+                            } else {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_online),
+                                    contentDescription = "Модель готова",
+                                    modifier = Modifier
+                                        .size(16.dp),
+                                    tint = Color.Unspecified
+                                )
                             }
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = colorScheme.background, // цвет фона TopBar
-                    navigationIconContentColor = colorScheme.tertiary,
-                    actionIconContentColor = colorScheme.tertiary
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = colorScheme.background,
+                        navigationIconContentColor = colorScheme.tertiary,
+                        actionIconContentColor = colorScheme.tertiary
+                    )
                 )
+            }
+
+            SettingsDrawer(
+                isVisible = showSettingsDrawer,
+                onDismiss = { showSettingsDrawer = false },
+                chatViewModel = chatViewModel,
+                notesViewModel = notesViewModel,
+                chatMessages = chatMessages,
+                currentRoute = currentRoute
             )
         }
     }
