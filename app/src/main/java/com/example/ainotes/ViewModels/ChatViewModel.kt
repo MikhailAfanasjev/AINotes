@@ -135,13 +135,33 @@ class ChatViewModel @Inject constructor(
     }
 
     fun setCurrentChatId(chatId: String?) {
-        _currentChatId.value = chatId
-        if (chatId != null) {
-            loadMessagesForChat(chatId)
-        } else {
-            // Очищаем сообщения, если чат не выбран
+        Log.d(TAG, "📝 setCurrentChatId вызван: $chatId (текущий: ${_currentChatId.value})")
+
+        // КРИТИЧЕСКИ ВАЖНО: Последовательность операций строго синхронизирована
+        // Шаг 1: Очищаем сообщения СИНХРОННО (если чат меняется)
+        if (chatId != _currentChatId.value) {
+            Log.d(TAG, "🧹 Шаг 1: Немедленно (синхронно) очищаем сообщения")
             _chatMessages.value = emptyList()
         }
+
+        // Шаг 2: Обновляем currentChatId СИНХРОННО
+        Log.d(TAG, "📝 Шаг 2: Обновляем currentChatId: ${_currentChatId.value} -> $chatId")
+        _currentChatId.value = chatId
+
+        // Шаг 3: Загружаем сообщения АСИНХРОННО (только если чат выбран)
+        if (chatId != null) {
+            Log.d(TAG, "📂 Шаг 3: Запускаем асинхронную загрузку сообщений для чата: $chatId")
+            loadMessagesForChat(chatId)
+        } else {
+            Log.d(TAG, "✅ Шаг 3: Чат не выбран (null), сообщения уже очищены")
+            // Дополнительная гарантия: еще раз убеждаемся, что сообщения точно пусты
+            _chatMessages.value = emptyList()
+        }
+
+        Log.d(
+            TAG,
+            "✅ setCurrentChatId завершен: currentChatId=${_currentChatId.value}, messages=${_chatMessages.value.size}"
+        )
     }
 
     private fun loadMessagesForChat(chatId: String) {

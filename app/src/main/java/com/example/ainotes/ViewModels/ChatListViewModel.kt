@@ -78,19 +78,57 @@ class ChatListViewModel @Inject constructor(
     }
 
     fun deleteChat(chatId: String) {
+        Log.d(TAG, "🗑️ ========== НАЧАЛО УДАЛЕНИЯ ЧАТА ==========")
+        Log.d(TAG, "🗑️ Удаляемый chatId: $chatId")
+        Log.d(TAG, "📊 Текущий currentChatId ДО удаления: ${_currentChatId.value}")
+        Log.d(TAG, "📊 Текущий список чатов ДО удаления: ${_chatList.value.size} шт.")
+
+        // КРИТИЧЕСКИ ВАЖНО: Немедленно сбрасываем currentChatId СИНХРОННО
+        // ДО запуска корутины. Это гарантирует мгновенную перерисовку UI.
+        val wasCurrentChat = _currentChatId.value == chatId
+        if (wasCurrentChat) {
+            Log.d(TAG, "🧹 НЕМЕДЛЕННО (синхронно) сбрасываем currentChatId для текущего чата")
+            _currentChatId.value = null
+            Log.d(TAG, "✅ currentChatId установлен в null (синхронно)")
+        } else {
+            Log.d(TAG, "ℹ️ Удаляемый чат НЕ является текущим, currentChatId не меняем")
+        }
+
+        Log.d(TAG, "📊 currentChatId ПОСЛЕ синхронного сброса: ${_currentChatId.value}")
+
+        // Асинхронно удаляем чат из БД и обновляем список
         viewModelScope.launch {
-            Log.d(TAG, "🗑️ Удаление чата: $chatId")
-            chatRepository.deleteChat(chatId)
+            try {
+                Log.d(TAG, "🗄️ Запускаем асинхронное удаление из БД...")
+                // Удаляем чат из БД
+                chatRepository.deleteChat(chatId)
+                Log.d(TAG, "✅ Чат удален из БД: $chatId")
 
-            // Обновляем список чатов
-            val remainingChats = chatRepository.getAllChats()
-            _chatList.value = remainingChats
+                // Обновляем список чатов
+                val remainingChats = chatRepository.getAllChats()
+                _chatList.value = remainingChats
+                Log.d(TAG, "📋 Список чатов обновлен, осталось: ${remainingChats.size}")
 
-            // Если удаляем текущий чат, сбрасываем currentChatId
-            // Это позволит ChatViewModel очистить сообщения
-            if (_currentChatId.value == chatId) {
-                Log.d(TAG, "🧹 Удален текущий чат, сбрасываем currentChatId")
-                _currentChatId.value = null
+                // Если был удален текущий чат и есть другие чаты, 
+                // можно автоматически выбрать первый (опционально)
+                if (wasCurrentChat && remainingChats.isNotEmpty()) {
+                    Log.d(
+                        TAG,
+                        "💡 Есть другие чаты (${remainingChats.size} шт.), можно выбрать первый"
+                    )
+                    // Раскомментируйте следующие строки, если хотите автоматически 
+                    // выбирать первый чат после удаления текущего:
+                    // val firstChatId = remainingChats.first().id
+                    // _currentChatId.value = firstChatId
+                    // Log.d(TAG, "✅ Автоматически выбран чат: $firstChatId")
+                } else if (wasCurrentChat && remainingChats.isEmpty()) {
+                    Log.d(TAG, "📭 Больше нет чатов, currentChatId остается null")
+                }
+
+                Log.d(TAG, "🗑️ ========== УДАЛЕНИЕ ЗАВЕРШЕНО ==========")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ ОШИБКА при удалении чата: $chatId", e)
+                Log.d(TAG, "🗑️ ========== УДАЛЕНИЕ ПРЕРВАНО С ОШИБКОЙ ==========")
             }
         }
     }

@@ -84,21 +84,32 @@ fun ChatScreen(
     initialDarkTheme: Boolean,
 ) {
     val focusManager = LocalFocusManager.current
-    var userInput by rememberSaveable { mutableStateOf("") }
-    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val chatMessages by chatViewModel.chatMessages.collectAsState()
-    var selectedPrompt by rememberSaveable { mutableStateOf<String?>(null) }
-    val isWriting by chatViewModel.isAssistantWriting.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
-    val userInteracted = remember { mutableStateOf(false) }
     val bottomPaddingPx = with(LocalDensity.current) { 10.dp.roundToPx() }
 
-    // Состояния для управления чатами
+    // Состояния для управления чатами - КРИТИЧЕСКИ ВАЖНО: собираем ИХ ПЕРВЫМИ
     val currentChatId by chatListViewModel.currentChatId.collectAsState()
     val chatList by chatListViewModel.chatList.collectAsState()
     val isCreatingChat by chatListViewModel.isCreatingChat.collectAsState()
     val isChatsLoaded by chatListViewModel.isChatsLoaded.collectAsState()
+
+    // Состояния ChatViewModel - зависят от currentChatId
+    val chatMessages by chatViewModel.chatMessages.collectAsState()
+    val chatViewModelChatId by chatViewModel.currentChatId.collectAsState()
+    val isWriting by chatViewModel.isAssistantWriting.collectAsState()
+
+    // UI состояния - используют remember с ключом currentChatId для сброса при смене чата
+    var userInput by rememberSaveable(currentChatId) { mutableStateOf("") }
+    val listState = rememberSaveable(currentChatId, saver = LazyListState.Saver) { LazyListState() }
+    var selectedPrompt by rememberSaveable(currentChatId) { mutableStateOf<String?>(null) }
+    val userInteracted = remember(currentChatId) { mutableStateOf(false) }
+
+    // Логирование для отладки - показывает текущее состояние при каждой рекомпозиции
+    Log.d(
+        ">>>ChatScreen",
+        "🔄 RECOMPOSITION: currentChatId=$currentChatId, chatViewModelChatId=$chatViewModelChatId, chatMessages=${chatMessages.size}, isChatsLoaded=$isChatsLoaded"
+    )
 
     // Инициализация первого чата при запуске, если нет активного чата
     // Используем флаг для отслеживания, был ли уже выполнен начальный запуск
@@ -138,19 +149,34 @@ fun ChatScreen(
     }
 
     // Синхронизируем выбранный чат между ViewModel'ами
-    LaunchedEffect(currentChatId) {
-        if (currentChatId != null) {
+    // Используем key для принудительной пересборки при изменении currentChatId
+    // КРИТИЧЕСКИ ВАЖНО: Синхронизация должна происходить НЕМЕДЛЕННО при любом изменении currentChatId
+    LaunchedEffect(key1 = currentChatId) {
+        // Проверяем, синхронизированы ли оба ViewModel
+        if (chatViewModelChatId != currentChatId) {
             Log.d(
                 ">>>ChatScreen",
-                "🔄 Синхронизация: устанавливаем currentChatId = $currentChatId в ChatViewModel"
+                "🔄 Синхронизация: currentChatId изменился $chatViewModelChatId -> $currentChatId"
             )
+
+            // Сбрасываем флаг взаимодействия при смене чата
+            userInteracted.value = false
+
+            // КРИТИЧЕСКИ ВАЖНО: Всегда синхронизируем ChatViewModel с ChatListViewModel
+            // даже если currentChatId = null. Это гарантирует очистку сообщений.
             chatViewModel.setCurrentChatId(currentChatId)
-        } else {
-            Log.d(
-                ">>>ChatScreen",
-                "🧹 Синхронизация: сбрасываем currentChatId в ChatViewModel (очищаем сообщения)"
-            )
-            chatViewModel.setCurrentChatId(null)
+
+            if (currentChatId != null) {
+                Log.d(
+                    ">>>ChatScreen",
+                    "🔄 Загружаем сообщения для чата: $currentChatId"
+                )
+            } else {
+                Log.d(
+                    ">>>ChatScreen",
+                    "🧹 Очищаем сообщения (currentChatId = null)"
+                )
+            }
         }
     }
 
@@ -248,7 +274,12 @@ fun ChatScreen(
     val colorScheme = MaterialTheme.colorScheme
 
     // Проверяем, есть ли активный чат перед отображением интерфейса
-    if (currentChatId == null) {
+    // КРИТИЧЕСКИ ВАЖНО: Проверяем оба источника истины для гарантированной синхронизации
+    if (currentChatId == null || chatViewModelChatId == null) {
+        Log.d(
+            ">>>ChatScreen",
+            "⚠️ Отображаем пустой экран: currentChatId=$currentChatId, chatViewModelChatId=$chatViewModelChatId")
+
         // Показываем сообщение в зависимости от состояния
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -259,12 +290,14 @@ fun ChatScreen(
                 modifier = Modifier.padding(16.dp)
             ) {
                 if (!isChatsLoaded || isCreatingChat) {
+                    Log.d(">>>ChatScreen", "⏳ Показываем 'Загрузка чата...'")
                     Text(
                         text = "Загрузка чата...",
                         style = MaterialTheme.typography.bodyLarge,
                         color = colorScheme.onBackground
                     )
                 } else {
+                    Log.d(">>>ChatScreen", "📭 Показываем 'Нет активного чата'")
                     Text(
                         text = "Нет активного чата",
                         style = MaterialTheme.typography.headlineSmall,
@@ -281,6 +314,11 @@ fun ChatScreen(
         }
         return
     }
+
+    Log.d(
+        ">>>ChatScreen",
+        "✅ Отображаем интерфейс чата: currentChatId=$currentChatId, chatViewModelChatId=$chatViewModelChatId, сообщений=${chatMessages.size}"
+    )
 
     // вертикальная укладка всех элементов экрана (чипы, сообщения, ввод)
     Column(

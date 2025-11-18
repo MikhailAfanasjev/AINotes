@@ -75,6 +75,7 @@ fun SettingsDrawer(
     // Chat list states
     val chatList by chatListViewModel.chatList.collectAsState()
     val currentChatId by chatListViewModel.currentChatId.collectAsState()
+    val chatViewModelChatId by chatViewModel.currentChatId.collectAsState()
     val isCreatingChat by chatListViewModel.isCreatingChat.collectAsState()
     val isTitleGenerating by chatViewModel.isTitleGenerating.collectAsState()
 
@@ -90,13 +91,13 @@ fun SettingsDrawer(
         if (isVisible) {
             android.util.Log.d(
                 ">>>SettingsDrawer",
-                "📂 Открыт drawer. CurrentChatId: $currentChatId"
+                "📂 Открыт drawer. CurrentChatId: $currentChatId, ChatViewModelChatId: $chatViewModelChatId"
             )
             android.util.Log.d(">>>SettingsDrawer", "📋 Список чатов: ${chatList.size} шт.")
             chatList.forEach { chat ->
                 android.util.Log.d(
                     ">>>SettingsDrawer",
-                    "  - ${chat.title} (id: ${chat.id}) ${if (chat.id == currentChatId) "✓ ВЫБРАН" else ""}"
+                    "  - ${chat.title} (id: ${chat.id}) ${if (chat.id == currentChatId) "✓ ВЫБРАН (ChatList)" else ""}${if (chat.id == chatViewModelChatId) " ✓ ВЫБРАН (ChatVM)" else ""}"
                 )
             }
             chatListViewModel.refreshChats()
@@ -434,16 +435,43 @@ fun SettingsDrawer(
                                     .weight(1f)
                             ) {
                                 items(nonEmptyChats) { chat ->
+                                    // Чат считается выбранным, если он соответствует ЛЮБОМУ из источников истины
+                                    val isSelected =
+                                        chat.id == currentChatId || chat.id == chatViewModelChatId
+
                                     ChatListItem(
                                         chat = chat,
-                                        isSelected = chat.id == currentChatId,
+                                        isSelected = isSelected,
                                         onChatClick = { chatId ->
+                                            android.util.Log.d(
+                                                ">>>SettingsDrawer",
+                                                "📱 Выбор чата: $chatId"
+                                            )
                                             chatListViewModel.selectChat(chatId)
                                             chatViewModel.setCurrentChatId(chatId)
                                             onDismiss()
                                         },
                                         onDeleteClick = { chatId ->
+                                            android.util.Log.d(
+                                                ">>>SettingsDrawer",
+                                                "🗑️ Удаление чата: $chatId. CurrentChatId: $currentChatId, ChatViewModelChatId: $chatViewModelChatId"
+                                            )
+
+                                            // КРИТИЧЕСКИ ВАЖНО: Удаляем чат из ChatListViewModel
                                             chatListViewModel.deleteChat(chatId)
+
+                                            // КРИТИЧЕСКИ ВАЖНО: Немедленно синхронизируем ChatViewModel
+                                            // Проверяем ОБА возможных источника истины
+                                            if (chatId == currentChatId || chatId == chatViewModelChatId) {
+                                                android.util.Log.d(
+                                                    ">>>SettingsDrawer",
+                                                    "🧹 Немедленно очищаем ChatViewModel (chatId=$chatId совпадает)"
+                                                )
+                                                chatViewModel.setCurrentChatId(null)
+                                            }
+
+                                            // Закрываем drawer, чтобы пользователь сразу увидел очищенный экран
+                                            onDismiss()
                                         },
                                         modifier = Modifier.padding(vertical = 4.dp)
                                     )
