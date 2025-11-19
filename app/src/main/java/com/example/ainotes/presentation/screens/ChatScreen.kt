@@ -108,11 +108,11 @@ fun ChatScreen(
     val isWriting by chatViewModel.isAssistantWriting.collectAsState()
     val selectedModel by chatViewModel.selectedModel.collectAsState()
     val modelInitialized by chatViewModel.modelInitialized.collectAsState()
+    val selectedPrompt by chatViewModel.selectedPrompt.collectAsState()
 
     // UI состояния - используют remember с ключом currentChatId для сброса при смене чата
     var userInput by rememberSaveable(currentChatId) { mutableStateOf("") }
     val listState = rememberSaveable(currentChatId, saver = LazyListState.Saver) { LazyListState() }
-    var selectedPrompt by rememberSaveable(currentChatId) { mutableStateOf<String?>(null) }
     val userInteracted = remember(currentChatId) { mutableStateOf(false) }
 
     // Флаг для предотвращения автоматической синхронизации при создании нового чата
@@ -338,11 +338,11 @@ fun ChatScreen(
                     selected = (selectedPrompt == prompt),
                     onClick = {
                         if (selectedPrompt == prompt) {
-                            selectedPrompt = null
-                            chatViewModel.setSystemPrompt(chatViewModel.defaultSystemPrompt)
+                            // Сбрасываем выбор - updateSelectedPrompt сам применит дефолтный промпт
+                            chatViewModel.updateSelectedPrompt(null)
                         } else {
-                            selectedPrompt = prompt
-                            chatViewModel.setSystemPrompt(prompt)
+                            // Выбираем промпт - updateSelectedPrompt сам применит его
+                            chatViewModel.updateSelectedPrompt(prompt)
                         }
                     }
                 )

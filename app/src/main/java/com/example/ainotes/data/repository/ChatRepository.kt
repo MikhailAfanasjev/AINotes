@@ -131,4 +131,19 @@ class ChatRepository @Inject constructor() {
                 realm.close()
             }
         }
+
+    suspend fun updateChatSelectedPrompt(chatId: String, selectedPrompt: String) =
+        withContext(Dispatchers.IO) {
+            val realm = Realm.getDefaultInstance()
+            try {
+                realm.executeTransaction { tx ->
+                    val chat = tx.where(ChatEntity::class.java)
+                        .equalTo("id", chatId)
+                        .findFirst()
+                    chat?.selectedPrompt = selectedPrompt
+                }
+            } finally {
+                realm.close()
+            }
+        }
 }

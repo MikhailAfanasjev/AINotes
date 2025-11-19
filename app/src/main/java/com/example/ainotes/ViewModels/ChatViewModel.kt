@@ -59,6 +59,9 @@ class ChatViewModel @Inject constructor(
     private val _systemPrompt = MutableStateFlow(DEFAULT_SYSTEM_PROMPT)
 
     val defaultSystemPrompt: String = DEFAULT_SYSTEM_PROMPT
+
+    private val _selectedPrompt = MutableStateFlow<String?>(null)
+    val selectedPrompt: StateFlow<String?> = _selectedPrompt.asStateFlow()
     private var currentCall: Call<ResponseBody>? = null
     private var initializationCall: Call<ResponseBody>? = null
 
@@ -156,10 +159,27 @@ class ChatViewModel @Inject constructor(
             loadMessagesForChat(chatId)
         } else if (chatId != null && skipLoad) {
             Log.d(TAG, "⏭️ Шаг 3: Пропускаем загрузку сообщений (skipLoad=true)")
+            // При skipLoad НЕ загружаем промпт из БД, так как:
+            // 1. Для нового чата промпт еще не был сохранен
+            // 2. Пользователь мог выбрать FilterChip перед созданием чата
+            // 3. Текущий выбранный промпт уже находится в _selectedPrompt и _systemPrompt
+            Log.d(TAG, "ℹ️ Сохраняем текущий выбранный промпт: '${_selectedPrompt.value}'")
+
+            // Сохраняем текущий выбранный промпт в БД для нового чата
+            val currentPrompt = _selectedPrompt.value
+            if (currentPrompt != null) {
+                viewModelScope.launch {
+                    chatEntityRepo.updateChatSelectedPrompt(chatId, currentPrompt)
+                    Log.d(TAG, "💾 Текущий промпт сохранен в БД для нового чата: $chatId")
+                }
+            }
         } else {
             Log.d(TAG, "✅ Шаг 3: Чат не выбран (null), сообщения уже очищены")
             // Дополнительная гарантия: еще раз убеждаемся, что сообщения точно пусты
             _chatMessages.value = emptyList()
+            // Сбрасываем выбранный промпт при отсутствии чата
+            _selectedPrompt.value = null
+            _systemPrompt.value = DEFAULT_SYSTEM_PROMPT
         }
 
         Log.d(
@@ -181,11 +201,50 @@ class ChatViewModel @Inject constructor(
                 }
             Log.d(TAG, "📥 Загружено сообщений из БД для чата $chatId: ${persisted.size}")
             _chatMessages.value = persisted
+
+            // Загружаем сохраненный выбранный промпт для чата
+            val chat = chatEntityRepo.getChatById(chatId)
+            val savedPrompt = chat?.selectedPrompt?.takeIf { it.isNotEmpty() }
+            _selectedPrompt.value = savedPrompt
+
+            // Применяем сохраненный промпт к системе (или дефолтный)
+            if (savedPrompt != null) {
+                _systemPrompt.value = savedPrompt
+                Log.d(TAG, "✅ Восстановлен сохраненный промпт для чата $chatId")
+            } else {
+                _systemPrompt.value = DEFAULT_SYSTEM_PROMPT
+                Log.d(TAG, "✅ Применен дефолтный промпт для чата $chatId")
+            }
         }
     }
 
     fun setSystemPrompt(prompt: String) {
         _systemPrompt.value = prompt
+    }
+
+    fun updateSelectedPrompt(prompt: String?) {
+        Log.d(
+            TAG,
+            "🎯 updateSelectedPrompt вызван: prompt='$prompt', currentChatId=${_currentChatId.value}"
+        )
+
+        _selectedPrompt.value = prompt
+
+        // ВАЖНО: Сразу применяем системный промпт
+        _systemPrompt.value = prompt ?: DEFAULT_SYSTEM_PROMPT
+
+        Log.d(TAG, "✅ Системный промпт обновлен: '${_systemPrompt.value}'")
+
+        // Сохраняем выбранный промпт в БД для текущего чата
+        val currentChatId = _currentChatId.value
+        if (currentChatId != null) {
+            viewModelScope.launch {
+                chatEntityRepo.updateChatSelectedPrompt(currentChatId, prompt ?: "")
+                Log.d(TAG, "💾 Промпт сохранен в БД для чата: $currentChatId")
+            }
+        } else {
+            Log.w(TAG, "⚠️ Не удалось сохранить промпт - нет активного чата")
+        }
     }
 
     /**
@@ -428,6 +487,10 @@ class ChatViewModel @Inject constructor(
         val currentChatId = _currentChatId.value ?: return
 
         _isAssistantWriting.value = true
+
+        // Логируем текущий системный промпт для отладки
+        Log.d(TAG, "📤 handleSend: используем системный промпт='${_systemPrompt.value}'")
+
         val allMessages = listOf(Message("system", _systemPrompt.value)) + _chatMessages.value
         val req = ChatGPTRequest(model = _selectedModel.value, messages = allMessages, stream = true)
 

@@ -11,5 +11,6 @@ open class ChatEntity(
     var createdAt: Long = System.currentTimeMillis(),
     var lastMessageAt: Long = System.currentTimeMillis(),
     var messageCount: Int = 0,
-    var isTitleGenerated: Boolean = false // Флаг для отслеживания, был ли заголовок сгенерирован автоматически
+    var isTitleGenerated: Boolean = false, // Флаг для отслеживания, был ли заголовок сгенерирован автоматически
+    var selectedPrompt: String = "" // Сохраненный промпт для FilterChip (пустая строка = не выбран)
 ) : RealmObject()
