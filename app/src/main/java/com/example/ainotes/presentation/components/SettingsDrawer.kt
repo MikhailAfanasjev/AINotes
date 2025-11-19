@@ -326,34 +326,6 @@ fun SettingsDrawer(
 
                     Spacer(Modifier.height(24.dp))
 
-                    // Очистить текущий чат
-                    if (currentRoute == "chat" && chatMessages.isNotEmpty()) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    chatViewModel.clearChat()
-                                    onDismiss()
-                                }
-                                .padding(vertical = 12.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_remove),
-                                contentDescription = "Очистить чат",
-                                tint = colorScheme.error,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(Modifier.width(16.dp))
-                            Text(
-                                text = "Очистить текущий чат",
-                                color = colorScheme.error,
-                                fontSize = 16.sp
-                            )
-                        }
-                        Spacer(Modifier.height(12.dp))
-                    }
-
                     // Удалить заметки
                     if (currentRoute == "notes" && notes.isNotEmpty()) {
                         Row(
@@ -496,9 +468,6 @@ fun SettingsDrawer(
                                                 )
                                                 chatViewModel.setCurrentChatId(null)
                                             }
-
-                                            // Закрываем drawer, чтобы пользователь сразу увидел очищенный экран
-                                            onDismiss()
                                         },
                                         modifier = Modifier.padding(vertical = 4.dp)
                                     )
