@@ -134,8 +134,11 @@ class ChatViewModel @Inject constructor(
         initializeModel()
     }
 
-    fun setCurrentChatId(chatId: String?) {
-        Log.d(TAG, "📝 setCurrentChatId вызван: $chatId (текущий: ${_currentChatId.value})")
+    fun setCurrentChatId(chatId: String?, skipLoad: Boolean = false) {
+        Log.d(
+            TAG,
+            "📝 setCurrentChatId вызван: $chatId (текущий: ${_currentChatId.value}), skipLoad=$skipLoad"
+        )
 
         // КРИТИЧЕСКИ ВАЖНО: Последовательность операций строго синхронизирована
         // Шаг 1: Очищаем сообщения СИНХРОННО (если чат меняется)
@@ -147,11 +150,14 @@ class ChatViewModel @Inject constructor(
         // Шаг 2: Обновляем currentChatId СИНХРОННО
         Log.d(TAG, "📝 Шаг 2: Обновляем currentChatId: ${_currentChatId.value} -> $chatId")
         _currentChatId.value = chatId
+        Log.d(TAG, "✅ Шаг 2 завершен: _currentChatId.value = ${_currentChatId.value}")
 
-        // Шаг 3: Загружаем сообщения АСИНХРОННО (только если чат выбран)
-        if (chatId != null) {
+        // Шаг 3: Загружаем сообщения АСИНХРОННО (только если чат выбран и не skipLoad)
+        if (chatId != null && !skipLoad) {
             Log.d(TAG, "📂 Шаг 3: Запускаем асинхронную загрузку сообщений для чата: $chatId")
             loadMessagesForChat(chatId)
+        } else if (chatId != null && skipLoad) {
+            Log.d(TAG, "⏭️ Шаг 3: Пропускаем загрузку сообщений (skipLoad=true)")
         } else {
             Log.d(TAG, "✅ Шаг 3: Чат не выбран (null), сообщения уже очищены")
             // Дополнительная гарантия: еще раз убеждаемся, что сообщения точно пусты
@@ -175,6 +181,7 @@ class ChatViewModel @Inject constructor(
                         isComplete = entity.isComplete
                     )
                 }
+            Log.d(TAG, "📥 Загружено сообщений из БД для чата $chatId: ${persisted.size}")
             _chatMessages.value = persisted
         }
     }
@@ -251,6 +258,7 @@ class ChatViewModel @Inject constructor(
             return
         }
 
+        Log.d(TAG, "📤 Отправка сообщения в чат: $currentChatId")
         addMessage(Message(role = "user", content = inputText))
         messageQueue.trySend(inputText)
 

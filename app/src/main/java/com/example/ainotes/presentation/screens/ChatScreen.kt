@@ -73,6 +73,7 @@ import com.example.ainotes.viewModels.ChatViewModel
 import com.example.linguareader.R
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @SuppressLint("SuspiciousIndentation", "UnrememberedMutableState")
@@ -105,6 +106,9 @@ fun ChatScreen(
     var selectedPrompt by rememberSaveable(currentChatId) { mutableStateOf<String?>(null) }
     val userInteracted = remember(currentChatId) { mutableStateOf(false) }
 
+    // Флаг для предотвращения автоматической синхронизации при создании нового чата
+    val isCreatingNewChatWithMessage = remember { mutableStateOf(false) }
+
     // Логирование для отладки - показывает текущее состояние при каждой рекомпозиции
     Log.d(
         ">>>ChatScreen",
@@ -133,16 +137,12 @@ fun ChatScreen(
                 )
                 chatListViewModel.selectChat(firstChatId)
                 // Синхронизация с ChatViewModel произойдет автоматически через LaunchedEffect(currentChatId)
-            } else if (currentChatId == null && chatList.isEmpty() && !isCreatingChat) {
-                // Создаем первый чат только если:
-                // 1. Нет текущего активного чата
-                // 2. Список чатов полностью пуст (и загружен из БД!)
-                // 3. Не идёт процесс создания чата (чтобы избежать дублирования)
+            } else if (currentChatId == null && chatList.isEmpty()) {
+                // Если нет чатов - просто показываем пустой экран с приглашением
                 Log.d(
                     ">>>ChatScreen",
-                    "➕ Список чатов пуст после загрузки из БД, создаем новый чат"
+                    "📭 Список чатов пуст - ожидаем, что пользователь создаст новый чат отправкой сообщения"
                 )
-                chatListViewModel.createNewChat()
             }
             hasInitialized.value = true
         }
@@ -154,22 +154,32 @@ fun ChatScreen(
     LaunchedEffect(key1 = currentChatId) {
         // Проверяем, синхронизированы ли оба ViewModel
         if (chatViewModelChatId != currentChatId) {
+            // Пропускаем автоматическую синхронизацию, если идет создание нового чата с сообщением
+            if (isCreatingNewChatWithMessage.value) {
+                Log.d(
+                    ">>>ChatScreen",
+                    "⏭️ Пропускаем автоматическую синхронизацию (идет создание нового чата с сообщением)"
+                )
+                return@LaunchedEffect
+            }
+
             Log.d(
                 ">>>ChatScreen",
-                "🔄 Синхронизация: currentChatId изменился $chatViewModelChatId -> $currentChatId"
+                "🔄 Автоматическая синхронизация: currentChatId изменился $chatViewModelChatId -> $currentChatId"
             )
 
             // Сбрасываем флаг взаимодействия при смене чата
             userInteracted.value = false
 
-            // КРИТИЧЕСКИ ВАЖНО: Всегда синхронизируем ChatViewModel с ChatListViewModel
+            // КРИТИЧЕСКИ ВАЖ��О: Всегда синхронизируем ChatViewModel с ChatListViewModel
             // даже если currentChatId = null. Это гарантирует очистку сообщений.
+            // ВАЖНО: Эта синхронизация загружает сообщения из БД (skipLoad=false по умолчанию)
             chatViewModel.setCurrentChatId(currentChatId)
 
             if (currentChatId != null) {
                 Log.d(
                     ">>>ChatScreen",
-                    "🔄 Загружаем сообщения для чата: $currentChatId"
+                    "🔄 Автоматическая загрузка сообщений для чата: $currentChatId"
                 )
             } else {
                 Log.d(
@@ -185,26 +195,48 @@ fun ChatScreen(
     LaunchedEffect(requestNewChat) {
         requestNewChat?.let { messageText ->
             Log.d(">>>ChatScreen", "📩 Получен запрос на создание чата для сообщения: $messageText")
+
+            // Устанавливаем флаг, чтобы предотвратить автоматическую синхронизацию
+            isCreatingNewChatWithMessage.value = true
+
+            // Запоминаем старый chatId, чтобы дождаться изменения
+            val oldChatId = currentChatId
+            Log.d(">>>ChatScreen", "📝 Текущий chatId перед созданием: $oldChatId")
+
             // Создаем новый чат
             chatListViewModel.createNewChat()
 
-            // Ждем, пока чат создастся и установится как текущий
-            var attempts = 0
-            while (currentChatId == null && attempts < 20) {
-                kotlinx.coroutines.delay(50)
-                attempts++
-            }
+            // Ждем, пока currentChatId ИЗМЕНИТСЯ (станет другим, не null)
+            Log.d(">>>ChatScreen", "⏳ Ожидание создания НОВОГО чата в ChatListViewModel...")
+            chatListViewModel.currentChatId
+                .first { it != null && it != oldChatId }
+                .let { newChatId ->
+                    Log.d(
+                        ">>>ChatScreen",
+                        "✅ Чат создан в ChatListViewModel: $newChatId (старый был: $oldChatId)"
+                    )
 
-            if (currentChatId != null) {
-                Log.d(">>>ChatScreen", "✅ Чат создан, отправляем сообщение")
-                // Сбрасываем запрос перед отправкой
-                chatViewModel.clearNewChatRequest()
-                // Отправляем сообщение в новый чат
-                chatViewModel.sendMessage(messageText)
-            } else {
-                Log.e(">>>ChatScreen", "❌ Не удалось создать чат за отведенное время")
-                chatViewModel.clearNewChatRequest()
-            }
+                    // Синхронизируем ChatViewModel с новым чатом БЕЗ загрузки сообщений
+                    // (так как чат только что создан и пуст)
+                    Log.d(
+                        ">>>ChatScreen",
+                        "🔄 Синхронизируем ChatViewModel без загрузки сообщений..."
+                    )
+                    chatViewModel.setCurrentChatId(newChatId, skipLoad = true)
+
+                    Log.d(">>>ChatScreen", "✅ ChatViewModel синхронизирован с чатом: $newChatId")
+
+                    // Сбрасываем запрос перед отправкой
+                    chatViewModel.clearNewChatRequest()
+
+                    // Отправляем сообщение в новый чат
+                    Log.d(">>>ChatScreen", "📤 Отправляем сообщение в чат: $newChatId")
+                    chatViewModel.sendMessage(messageText)
+
+                    // Сбрасываем флаг после отправки сообщения
+                    isCreatingNewChatWithMessage.value = false
+                    Log.d(">>>ChatScreen", "✅ Процесс создания чата с сообщением завершен")
+                }
         }
     }
 
@@ -273,51 +305,9 @@ fun ChatScreen(
 
     val colorScheme = MaterialTheme.colorScheme
 
-    // Проверяем, есть ли активный чат перед отображением интерфейса
-    // КРИТИЧЕСКИ ВАЖНО: Проверяем оба источника истины для гарантированной синхронизации
-    if (currentChatId == null || chatViewModelChatId == null) {
-        Log.d(
-            ">>>ChatScreen",
-            "⚠️ Отображаем пустой экран: currentChatId=$currentChatId, chatViewModelChatId=$chatViewModelChatId")
-
-        // Показываем сообщение в зависимости от состояния
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(16.dp)
-            ) {
-                if (!isChatsLoaded || isCreatingChat) {
-                    Log.d(">>>ChatScreen", "⏳ Показываем 'Загрузка чата...'")
-                    Text(
-                        text = "Загрузка чата...",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = colorScheme.onBackground
-                    )
-                } else {
-                    Log.d(">>>ChatScreen", "📭 Показываем 'Нет активного чата'")
-                    Text(
-                        text = "Нет активного чата",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = colorScheme.onBackground
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Откройте меню настроек, чтобы создать новый чат",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colorScheme.onBackground.copy(alpha = 0.7f)
-                    )
-                }
-            }
-        }
-        return
-    }
-
     Log.d(
         ">>>ChatScreen",
-        "✅ Отображаем интерфейс чата: currentChatId=$currentChatId, chatViewModelChatId=$chatViewModelChatId, сообщений=${chatMessages.size}"
+        "✅ Отображаем интерфейс: currentChatId=$currentChatId, chatViewModelChatId=$chatViewModelChatId, сообщений=${chatMessages.size}"
     )
 
     // вертикальная укладка всех элементов экрана (чипы, сообщения, ввод)
@@ -363,51 +353,87 @@ fun ChatScreen(
                 .fillMaxSize()
             ) {
                 //вертикальный список сообщений чата
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .pointerInput(Unit) {
-                            detectTapGestures(
-                                onPress = {
-                                    focusManager.clearFocus()
-                                    userInteracted.value = true
-                                    tryAwaitRelease()
-                                }
-                            )
-                        },
-                    contentPadding = PaddingValues(top = 0.dp, bottom = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    itemsIndexed(chatMessages) { index, message ->
-                        val showTyping = index == chatMessages.lastIndex
-                                && message.role == "assistant"
-                                && isWriting
-                                && message.content.isBlank()
-
-                        val onRetry: () -> Unit = {
-                            val prevUser = chatMessages
-                                .take(index)
-                                .lastOrNull { it.role == "user" }
-                            if (prevUser != null) {
-                                // Сначала удаляем последний ответ ассистента
-                                chatViewModel.removeLastAssistantMessage()
-                                // Затем повторно отправляем сообщение пользователя без дублирования
-                                chatViewModel.retryLastMessage(prevUser.content)
+                // Если нет активного чата, показываем приветственное сообщение
+                if (currentChatId == null && chatMessages.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            if (!isChatsLoaded || isCreatingChat) {
+                                Text(
+                                    text = "Загрузка чата...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = colorScheme.onBackground
+                                )
+                            } else {
+                                Text(
+                                    text = "Начните новый чат",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = colorScheme.onBackground
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Введите сообщение, чтобы создать новый чат",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = colorScheme.onBackground.copy(alpha = 0.7f)
+                                )
                             }
                         }
-                        ChatMessageItem(
-                            message = message,
-                            onCreateNote = { selectedText ->
-                                navController.currentBackStackEntry
-                                    ?.savedStateHandle
-                                    ?.set("initialText", selectedText)
-                                navController.navigate("add_edit_note/-1")
+                    }
+                } else {
+                    //вертикальный список сообщений чата
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onPress = {
+                                        focusManager.clearFocus()
+                                        userInteracted.value = true
+                                        tryAwaitRelease()
+                                    }
+                                )
                             },
-                            onRetry = onRetry,
-                            showTyping = showTyping,
-                        )
+                        contentPadding = PaddingValues(top = 0.dp, bottom = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        itemsIndexed(chatMessages) { index, message ->
+                            val showTyping = index == chatMessages.lastIndex
+                                    && message.role == "assistant"
+                                    && isWriting
+                                    && message.content.isBlank()
+
+                            val onRetry: () -> Unit = {
+                                val prevUser = chatMessages
+                                    .take(index)
+                                    .lastOrNull { it.role == "user" }
+                                if (prevUser != null) {
+                                    // Сначала удаляем последний ответ ассистента
+                                    chatViewModel.removeLastAssistantMessage()
+                                    // Затем повторно отправляем сообщение пользователя без дублирования
+                                    chatViewModel.retryLastMessage(prevUser.content)
+                                }
+                            }
+                            ChatMessageItem(
+                                message = message,
+                                onCreateNote = { selectedText ->
+                                    navController.currentBackStackEntry
+                                        ?.savedStateHandle
+                                        ?.set("initialText", selectedText)
+                                    navController.navigate("add_edit_note/-1")
+                                },
+                                onRetry = onRetry,
+                                showTyping = showTyping,
+                            )
+                        }
                     }
                 }
                 // горизонтальное расположение текстового поля и кнопки отправки
@@ -446,14 +472,15 @@ fun ChatScreen(
                                 // обычная кнопка отправки
                                 IconButton(
                                     onClick = {
-                                        // Убедимся, что есть активный чат перед отправкой
-                                        if (currentChatId != null) {
+                                        if (userInput.isNotBlank()) {
+                                            // Просто отправляем сообщение - ChatViewModel сам обработает
+                                            // случай отсутствия активного чата через requestNewChat
                                             chatViewModel.sendMessage(userInput)
                                             userInput = ""
                                             keyboardController?.hide()
                                         }
                                     },
-                                    enabled = userInput.isNotBlank() && currentChatId != null
+                                    enabled = userInput.isNotBlank()
                                 ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.ic_send_message),
@@ -480,7 +507,9 @@ fun ChatScreen(
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(
                             onSend = {
-                                if (userInput.isNotBlank() && !isWriting && currentChatId != null) {
+                                if (userInput.isNotBlank() && !isWriting) {
+                                    // Просто отправляем сообщение - ChatViewModel сам обработает
+                                    // случай отсутствия активного чата через requestNewChat
                                     chatViewModel.sendMessage(userInput)
                                     userInput = ""
                                     keyboardController?.hide()
