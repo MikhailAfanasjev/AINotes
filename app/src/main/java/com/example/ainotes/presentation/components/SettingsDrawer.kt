@@ -54,6 +54,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsDrawer(
@@ -395,8 +399,31 @@ fun SettingsDrawer(
                             // Кнопка создания нового чата
                             IconButton(
                                 onClick = {
+                                    android.util.Log.d(
+                                        ">>>SettingsDrawer",
+                                        "🆕 Нажата кнопка создания нового чата"
+                                    )
                                     chatListViewModel.createNewChat()
-                                    onDismiss()
+
+                                    // Ждем создания чата и синхронизируем ChatViewModel
+                                    CoroutineScope(Dispatchers.Main).launch {
+                                        // Ждем, пока чат будет создан (currentChatId изменится)
+                                        chatListViewModel.currentChatId
+                                            .first { it != null }
+                                            .let { newChatId ->
+                                                android.util.Log.d(
+                                                    ">>>SettingsDrawer",
+                                                    "✅ Чат создан: $newChatId, синхронизируем ChatViewModel"
+                                                )
+                                                // Синхронизируем ChatViewModel с новым чатом БЕЗ загрузки сообщений
+                                                chatViewModel.setCurrentChatId(
+                                                    newChatId,
+                                                    skipLoad = true
+                                                )
+                                                // Закрываем drawer только после синхронизации
+                                                onDismiss()
+                                            }
+                                    }
                                 },
                                 enabled = !isCreatingChat
                             ) {
