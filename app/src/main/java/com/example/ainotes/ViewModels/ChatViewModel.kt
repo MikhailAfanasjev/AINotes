@@ -226,13 +226,22 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun updateLastAssistantMessage(content: String, isComplete: Boolean = false) {
+    private fun updateLastAssistantMessage(
+        content: String,
+        isComplete: Boolean = false,
+        tokenCount: Int = 0,
+        tokensPerSecond: Float = 0f,
+        generationTimeMs: Long = 0L
+    ) {
         val messages = _chatMessages.value.toMutableList()
         val idx = messages.indexOfLast { it.role == "assistant" }
         if (idx != -1) {
             messages[idx] = messages[idx].copy(
-                content    = content,
-                isComplete = isComplete
+                content = content,
+                isComplete = isComplete,
+                tokenCount = tokenCount,
+                tokensPerSecond = tokensPerSecond,
+                generationTimeMs = generationTimeMs
             )
             _chatMessages.value = messages
         }
@@ -469,6 +478,12 @@ class ChatViewModel @Inject constructor(
         builder: StringBuilder,
         chatId: String
     ) {
+        // Переменные для отслеживания метрик токенов
+        val startTime = System.currentTimeMillis()
+        var tokenCount = 0
+        var lastUpdateTime = startTime
+        var currentTokensPerSecond = 0f
+
         // Читаем строку за строкой из source
         while (!source.exhausted()) {
             val line = source.readUtf8Line().orEmpty()
@@ -485,19 +500,49 @@ class ChatViewModel @Inject constructor(
 
                 if (chunk.isNotEmpty()) {
                     builder.append(chunk)
+                    tokenCount++
+
+                    // Рассчитываем текущую скорость генерации
+                    val currentTime = System.currentTimeMillis()
+                    val elapsedSeconds = (currentTime - startTime) / 1000f
+                    if (elapsedSeconds > 0) {
+                        currentTokensPerSecond = tokenCount / elapsedSeconds
+                    }
+
                     // убираем cleanResponse - передаем исходный markdown
                     withContext(Dispatchers.Main) {
                         // обновляем сообщение ассистента по мере поступления текста
-                        updateLastAssistantMessage(builder.toString(), isComplete = false)
+                        updateLastAssistantMessage(
+                            content = builder.toString(),
+                            isComplete = false,
+                            tokenCount = tokenCount,
+                            tokensPerSecond = currentTokensPerSecond,
+                            generationTimeMs = currentTime - startTime
+                        )
                     }
+
+                    lastUpdateTime = currentTime
                 }
             }
         }
 
-        // Финальное завершение
+        // Финальное завершение с итоговыми метриками
         val finalRaw = builder.toString()
+        val totalTime = System.currentTimeMillis() - startTime
+        val finalTokensPerSecond = if (totalTime > 0) {
+            (tokenCount * 1000f) / totalTime
+        } else {
+            0f
+        }
+
         withContext(Dispatchers.Main) {
-            updateLastAssistantMessage(builder.toString(), isComplete = true)
+            updateLastAssistantMessage(
+                content = builder.toString(),
+                isComplete = true,
+                tokenCount = tokenCount,
+                tokensPerSecond = finalTokensPerSecond,
+                generationTimeMs = totalTime
+            )
         }
 
         // Сохраняем готовый ответ в БД
@@ -513,6 +558,16 @@ class ChatViewModel @Inject constructor(
 
         // Обновляем информацию о чате
         chatEntityRepo.updateChatLastMessage(chatId)
+
+        // Логируем итоговые метрики
+        Log.d(
+            TAG,
+            "📊 Метрики генерации: $tokenCount токенов за ${totalTime}мс (${
+                String.format(
+                    "%.2f",
+                    finalTokensPerSecond
+                )
+            } т/с)")
     }
 
     fun clearChat() {

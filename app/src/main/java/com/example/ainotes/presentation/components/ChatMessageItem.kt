@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,60 +101,115 @@ fun ChatMessageItem(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.End,
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Создать заметку
-                        IconButton(
-                            onClick = {
-                                onCreateNote(message.content)
-                            },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_notes),
-                                contentDescription = "Создать заметку",
-                                modifier = Modifier.size(16.dp),
-                                tint = colorScheme.onSecondary
-                            )
-                        }
+                        // Метрики токенов слева
+                        if (message.tokenCount > 0) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                // Скорость генерации (т/с)
+                                if (message.tokensPerSecond > 0) {
+                                    Text(
+                                        text = String.format("%.1f т/с", message.tokensPerSecond),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSecondary.copy(alpha = 0.6f)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "•",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSecondary.copy(alpha = 0.6f)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
 
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        // Копирование с уведомлением
-                        IconButton(
-                            onClick = {
-                                val clip = ClipData.newPlainText("simple text", message.content)
-                                (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(
-                                    clip
+                                // Количество токенов
+                                Text(
+                                    text = "${message.tokenCount} т",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colorScheme.onSecondary.copy(alpha = 0.6f)
                                 )
-                                Toast
-                                    .makeText(context, "Текст скопирован", Toast.LENGTH_SHORT)
-                                    .show()
-                            },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_copy),
-                                contentDescription = "Копировать ответ",
-                                modifier = Modifier.size(16.dp),
-                                tint = colorScheme.onSecondary
-                            )
+
+                                // Время генерации
+                                if (message.generationTimeMs > 0) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "•",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSecondary.copy(alpha = 0.6f)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    val seconds = message.generationTimeMs / 1000f
+                                    Text(
+                                        text = String.format("%.1f с", seconds),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSecondary.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                        } else {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        // Повторить ответ
-                        IconButton(
-                            onClick = onRetry,
-                            modifier = Modifier.size(24.dp)
+                        // Кнопки действий справа
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_reload),
-                                contentDescription = "Повторить ответ",
-                                modifier = Modifier.size(16.dp),
-                                tint = colorScheme.onSecondary
-                            )
+                            // Создать заметку
+                            IconButton(
+                                onClick = {
+                                    onCreateNote(message.content)
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_notes),
+                                    contentDescription = "Создать заметку",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = colorScheme.onSecondary
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            // Копирование с уведомлением
+                            IconButton(
+                                onClick = {
+                                    val clip = ClipData.newPlainText("simple text", message.content)
+                                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(
+                                        clip
+                                    )
+                                    Toast
+                                        .makeText(context, "Текст скопирован", Toast.LENGTH_SHORT)
+                                        .show()
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_copy),
+                                    contentDescription = "Копировать ответ",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = colorScheme.onSecondary
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            // Повторить ответ
+                            IconButton(
+                                onClick = onRetry,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_reload),
+                                    contentDescription = "Повторить ответ",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = colorScheme.onSecondary
+                                )
+                            }
                         }
                     }
                 }

@@ -10,7 +10,10 @@ data class Message(
     val role: String,
     val content: String,
     val isComplete: Boolean = false,
-    val stop: List<String>? = null
+    val stop: List<String>? = null,
+    val tokenCount: Int = 0,
+    val tokensPerSecond: Float = 0f,
+    val generationTimeMs: Long = 0L
 )
 
 data class ChatGPTResponse(
