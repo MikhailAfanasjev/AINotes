@@ -56,13 +56,16 @@ fun TopBar(
     navController: NavController,
     chatViewModel: ChatViewModel = hiltViewModel(),
     chatMessages: List<Message>,
-    notesViewModel: NotesViewModel = hiltViewModel()
+    notesViewModel: NotesViewModel = hiltViewModel(),
+    showSettingsDrawer: Boolean = false,
+    onShowSettingsDrawer: (Boolean) -> Unit = {},
+    expandModels: Boolean = false
 ) {
     val iconSize = 24.dp
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route?.substringBefore("/") ?: ""
     val notes by notesViewModel.notes.collectAsState(emptyList())
-    var showSettingsDrawer by remember { mutableStateOf(false) }
+    val selectedModel by chatViewModel.selectedModel.collectAsState()
     val isModelInitializing by chatViewModel.isModelInitializing.collectAsState()
     val modelInitialized by chatViewModel.modelInitialized.collectAsState()
 
@@ -107,7 +110,7 @@ fun TopBar(
                                 modifier = Modifier
                                     .size(48.dp)
                                     .padding(end = adaptiveIconPadding)
-                                    .clickable { showSettingsDrawer = true }
+                                    .clickable { onShowSettingsDrawer(true) }
                             )
 
                             Row(
@@ -160,41 +163,52 @@ fun TopBar(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(end = 8.dp)
                         ) {
-                            if (isModelInitializing) {
-                                val infiniteTransition =
-                                    rememberInfiniteTransition(label = "loading_rotation")
-                                val rotationAngle by infiniteTransition.animateFloat(
-                                    initialValue = 0f,
-                                    targetValue = 360f,
-                                    animationSpec = infiniteRepeatable(
-                                        animation = tween(1000, easing = LinearEasing),
-                                        repeatMode = RepeatMode.Restart
-                                    ), label = "rotation"
-                                )
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_loading),
-                                    contentDescription = "Загрузка модели",
-                                    modifier = Modifier
-                                        .size(16.dp)
-                                        .rotate(rotationAngle),
-                                    tint = Color.Unspecified
-                                )
-                            } else if (!modelInitialized) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_error),
-                                    contentDescription = "Ошибка инициализации модели",
-                                    modifier = Modifier
-                                        .size(16.dp),
-                                    tint = Color.Unspecified
-                                )
-                            } else {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_online),
-                                    contentDescription = "Модель готова",
-                                    modifier = Modifier
-                                        .size(16.dp),
-                                    tint = Color.Unspecified
-                                )
+                            when {
+                                isModelInitializing -> {
+                                    val infiniteTransition =
+                                        rememberInfiniteTransition(label = "loading_rotation")
+                                    val rotationAngle by infiniteTransition.animateFloat(
+                                        initialValue = 0f,
+                                        targetValue = 360f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(1000, easing = LinearEasing),
+                                            repeatMode = RepeatMode.Restart
+                                        ), label = "rotation"
+                                    )
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_loading),
+                                        contentDescription = "Загрузка модели",
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .rotate(rotationAngle),
+                                        tint = Color.Unspecified
+                                    )
+                                }
+
+                                selectedModel.isEmpty() -> {
+                                    // Модель не выбрана - не показываем иконку
+                                }
+
+                                !modelInitialized -> {
+                                    // Модель выбрана, но не инициализирована (ошибка)
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_error),
+                                        contentDescription = "Ошибка инициализации модели",
+                                        modifier = Modifier
+                                            .size(16.dp),
+                                        tint = Color.Unspecified
+                                    )
+                                }
+
+                                else -> {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_online),
+                                        contentDescription = "Модель готова",
+                                        modifier = Modifier
+                                            .size(16.dp),
+                                        tint = Color.Unspecified
+                                    )
+                                }
                             }
                         }
                     },
@@ -208,11 +222,12 @@ fun TopBar(
 
             SettingsDrawer(
                 isVisible = showSettingsDrawer,
-                onDismiss = { showSettingsDrawer = false },
+                onDismiss = { onShowSettingsDrawer(false) },
                 chatViewModel = chatViewModel,
                 notesViewModel = notesViewModel,
                 chatMessages = chatMessages,
-                currentRoute = currentRoute
+                currentRoute = currentRoute,
+                expandModels = expandModels
             )
         }
     }

@@ -32,3 +32,15 @@ data class Usage(
     val completion_tokens: Int,
     val total_tokens: Int
 )
+
+data class ModelsResponse(
+    val `object`: String,
+    val data: List<ModelData>
+)
+
+data class ModelData(
+    val id: String,
+    val `object`: String,
+    val created: Long?,
+    val owned_by: String?
+)

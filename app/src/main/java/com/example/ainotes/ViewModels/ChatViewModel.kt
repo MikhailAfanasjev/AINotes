@@ -53,7 +53,7 @@ class ChatViewModel @Inject constructor(
     private val _currentChatId = MutableStateFlow<String?>(null)
     val currentChatId: StateFlow<String?> = _currentChatId.asStateFlow()
 
-    private val _selectedModel = MutableStateFlow("openai/gpt-oss-20b")
+    private val _selectedModel = MutableStateFlow("")
     val selectedModel: StateFlow<String> = _selectedModel.asStateFlow()
 
     private val _systemPrompt = MutableStateFlow(DEFAULT_SYSTEM_PROMPT)
@@ -70,15 +70,13 @@ class ChatViewModel @Inject constructor(
     private val messageQueue = Channel<String>(Channel.UNLIMITED)
     private var currentSendJob: Job? = null
 
-    // Карта моделей: краткое название -> полное с описанием
-    private val modelDisplayNames = mapOf(
-        "openai/gpt-oss-20b" to "openai/gpt-oss-20b (сбалансированная скорость и точность)",
-        "unsloth/gpt-oss-120b" to "openai/gpt-oss-120b (низкая скорость, очень высокая точность)",
-        "grok-3-gemma3-4b-distilled" to "grok-3-gemma3-4b-distilled (высокая скорость, низкая точность)",
-        "grok-3-gemma3-12b-distilled" to "grok-3-gemma3-12b-distilled (сбалансированная скорость и точность)"
-    )
+    // Список доступных моделей из API
+    private val _availableModels = MutableStateFlow<List<String>>(emptyList())
+    val availableModels: StateFlow<List<String>> = _availableModels.asStateFlow()
 
-    val availableModels = modelDisplayNames.values.toList()
+    // Флаг загрузки моделей
+    private val _isLoadingModels = MutableStateFlow(false)
+    val isLoadingModels: StateFlow<Boolean> = _isLoadingModels.asStateFlow()
 
     // Статус инициализации модели
     private val _isModelInitializing = MutableStateFlow(false)
@@ -130,8 +128,8 @@ class ChatViewModel @Inject constructor(
             _chatMessages.value = persisted
         }
 
-        // Инициализация модели при запуске
-        initializeModel()
+        // Загрузка списка моделей из API (без автоматической инициализации)
+        loadAvailableModels()
     }
 
     fun setCurrentChatId(chatId: String?, skipLoad: Boolean = false) {
@@ -194,24 +192,16 @@ class ChatViewModel @Inject constructor(
      * Получить отображаемое название модели для UI
      */
     fun getModelDisplayName(modelKey: String): String {
-        return modelDisplayNames[modelKey] ?: modelKey
-    }
-
-    /**
-     * Получить краткое название модели из отображаемого названия
-     */
-    private fun getModelKeyFromDisplayName(displayName: String): String {
-        return modelDisplayNames.entries.find { it.value == displayName }?.key ?: displayName
+        return modelKey
     }
 
     fun setModel(model: String) {
-        val modelKey = getModelKeyFromDisplayName(model)
         val oldModel = _selectedModel.value
-        _selectedModel.value = modelKey
+        _selectedModel.value = model
 
         // Всегда переинициализируем модель при смене
-        if (oldModel != modelKey) {
-            Log.d(TAG, "🔄 Смена модели через setModel: $oldModel -> $modelKey")
+        if (oldModel != model) {
+            Log.d(TAG, "🔄 Смена модели через setModel: $oldModel -> $model")
             initializeModel()
         }
     }
@@ -568,6 +558,12 @@ class ChatViewModel @Inject constructor(
      * Инициализация модели при запуске приложения
      */
     private fun initializeModel() {
+        // Пропускаем инициализацию, если модель еще не выбрана
+        if (_selectedModel.value.isEmpty()) {
+            Log.d(TAG, "⏭️ Пропуск инициализации: модель еще не выбрана")
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             _isModelInitializing.value = true
             _modelInitialized.value = false // Сбрасываем статус перед новой инициализацией
@@ -728,13 +724,12 @@ class ChatViewModel @Inject constructor(
      * Установить модель по отображаемому названию (для UI)
      */
     fun setModelByDisplayName(displayName: String) {
-        val modelKey = getModelKeyFromDisplayName(displayName)
         val oldModel = _selectedModel.value
-        _selectedModel.value = modelKey
+        _selectedModel.value = displayName
 
         // Всегда переинициализируем модель при смене (даже если предыдущая не была инициализирована)
-        if (oldModel != modelKey) {
-            Log.d(TAG, "🔄 Смена модели: $oldModel -> $modelKey")
+        if (oldModel != displayName) {
+            Log.d(TAG, "🔄 Смена модели: $oldModel -> $displayName")
             initializeModel()
         }
     }
@@ -763,5 +758,69 @@ class ChatViewModel @Inject constructor(
     fun retryLastMessage(userMessage: String) {
         // Добавляем в очередь для обработки, но не добавляем в список сообщений
         messageQueue.trySend(userMessage)
+    }
+
+    /**
+     * Загружает список доступных моделей из OpenAI API
+     */
+    fun loadAvailableModels() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isLoadingModels.value = true
+
+            try {
+                Log.d(TAG, "📋 Загрузка списка моделей из API...")
+
+                // Проверяем подключение к сети
+                if (!NetworkUtils.isConnected(context)) {
+                    Log.w(TAG, "⚠️ Нет подключения к интернету при загрузке моделей")
+                    baseUrlManager.refreshPublicUrl()
+                }
+
+                val response = api.getModels()
+
+                if (response.isSuccessful) {
+                    val modelsResponse = response.body()
+                    if (modelsResponse != null) {
+                        val models = modelsResponse.data.map { it.id }
+
+                        withContext(Dispatchers.Main) {
+                            _availableModels.value = models
+                            Log.d(TAG, "✅ Загружено моделей: ${models.size}")
+
+                            // Не выбираем модель автоматически - пользователь должен выбрать сам
+                            Log.d(TAG, "⏭️ Ожидание выбора модели пользователем")
+                        }
+                    } else {
+                        Log.w(TAG, "⚠️ Пустой ответ при загрузке моделей")
+                    }
+                } else {
+                    Log.w(TAG, "⚠️ Ошибка загрузки моделей: код ${response.code()}")
+                    val errorBody = response.errorBody()?.string()
+                    if (!errorBody.isNullOrBlank()) {
+                        Log.w(TAG, "📄 Тело ошибки: $errorBody")
+                    }
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Исключение при загрузке моделей", e)
+
+                // Дополнительная диагностика
+                when (e) {
+                    is java.net.SocketTimeoutException -> {
+                        Log.e(TAG, "⏱️ Таймаут при загрузке моделей")
+                    }
+
+                    is java.net.ConnectException -> {
+                        Log.e(TAG, "🔌 Ошибка подключения к серверу")
+                    }
+
+                    is java.net.UnknownHostException -> {
+                        Log.e(TAG, "🌐 Неизвестный хост - проверьте URL сервера")
+                    }
+                }
+            } finally {
+                _isLoadingModels.value = false
+            }
+        }
     }
 }

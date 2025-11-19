@@ -11,6 +11,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -62,6 +65,10 @@ class MainActivity : ComponentActivity() {
                 val notesViewModel: NotesViewModel = hiltViewModel()
                 val notes by notesViewModel.notes.collectAsState()
 
+                // Состояние для управления drawer настроек
+                var showSettingsDrawer by remember { mutableStateOf(false) }
+                var expandModels by remember { mutableStateOf(false) }
+
                 Scaffold(
                     topBar = {
                         val currentRoute = navController
@@ -74,17 +81,28 @@ class MainActivity : ComponentActivity() {
                                 navController = navController,
                                 chatViewModel = chatViewModel,
                                 chatMessages = chatMessages,
-                                notesViewModel = notesViewModel
+                                notesViewModel = notesViewModel,
+                                showSettingsDrawer = showSettingsDrawer,
+                                onShowSettingsDrawer = {
+                                    showSettingsDrawer = it
+                                    // Сбрасываем expandModels при закрытии drawer
+                                    if (!it) expandModels = false
+                                },
+                                expandModels = expandModels
                             )
                         }
                     }
                 ) { innerPadding ->
                     NavGraph(
-                        navController      = navController,
-                        modifier           = Modifier.padding(innerPadding),
-                        chatViewModel      = chatViewModel,
-                        notesViewModel     = notesViewModel,
-                        initialDarkTheme = isDarkTheme
+                        navController = navController,
+                        modifier = Modifier.padding(innerPadding),
+                        chatViewModel = chatViewModel,
+                        notesViewModel = notesViewModel,
+                        initialDarkTheme = isDarkTheme,
+                        onOpenSettings = {
+                            showSettingsDrawer = true
+                            expandModels = true
+                        }
                     )
                 }
 

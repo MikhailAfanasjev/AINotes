@@ -54,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import com.example.ainotes.presentation.ui.theme.White
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -65,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import android.util.Log
+import androidx.compose.foundation.layout.width
 import com.example.ainotes.presentation.components.ChatMessageItem
 import com.example.ainotes.presentation.components.FilterChip
 import com.example.ainotes.utils.scrollToBottomWithOverflow
@@ -83,6 +85,7 @@ fun ChatScreen(
     chatViewModel: ChatViewModel = hiltViewModel(),
     chatListViewModel: ChatListViewModel = hiltViewModel(),
     initialDarkTheme: Boolean,
+    onOpenSettings: () -> Unit = {}
 ) {
     val focusManager = LocalFocusManager.current
     val coroutineScope = rememberCoroutineScope()
@@ -99,6 +102,8 @@ fun ChatScreen(
     val chatMessages by chatViewModel.chatMessages.collectAsState()
     val chatViewModelChatId by chatViewModel.currentChatId.collectAsState()
     val isWriting by chatViewModel.isAssistantWriting.collectAsState()
+    val selectedModel by chatViewModel.selectedModel.collectAsState()
+    val modelInitialized by chatViewModel.modelInitialized.collectAsState()
 
     // UI состояния - используют remember с ключом currentChatId для сброса при смене чата
     var userInput by rememberSaveable(currentChatId) { mutableStateOf("") }
@@ -349,12 +354,78 @@ fun ChatScreen(
                 .windowInsetsPadding(WindowInsets.ime) // <- автоматический bottom-padding равный высоте клавы
         ) {
             // вертикальное расположение списка сообщений и строки ввода внутри Box
-            Column(modifier = Modifier
-                .fillMaxSize()
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
             ) {
                 //вертикальный список сообщений чата
-                // Если нет активного чата, показываем приветственное сообщение
-                if (currentChatId == null && chatMessages.isEmpty()) {
+                // Проверяем, выбрана ли модель
+                if (selectedModel.isEmpty()) {
+                    // Модель не выбрана - показываем сообщение
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(32.dp)
+                        ) {
+                            Spacer(modifier = Modifier.weight(1f))
+
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_settings),
+                                contentDescription = null,
+                                tint = colorScheme.tertiary,
+                                modifier = Modifier.size(64.dp)
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
+                            Text(
+                                text = "Активируйте модель",
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = colorScheme.onSecondary
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Для начала работы выберите AI модель",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colorScheme.onSecondary.copy(alpha = 0.7f)
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Кнопка открытия настроек
+                            androidx.compose.material3.Button(
+                                onClick = onOpenSettings,
+                                modifier = Modifier
+                                    .fillMaxWidth(0.6f)
+                                    .height(56.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                    containerColor = colorScheme.onTertiary,
+                                    contentColor = White
+                                )
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_settings),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = White
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Выберите модель",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = White
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                } else if (currentChatId == null && chatMessages.isEmpty()) {
+                    // Модель выбрана, но нет активного чата
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -453,7 +524,7 @@ fun ChatScreen(
                             .wrapContentHeight(),
                         placeholder = {
                             Text(
-                                text = stringResource(R.string.message),
+                                text = if (selectedModel.isEmpty()) "Выберите модель в настройках" else stringResource(R.string.message),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = colorScheme.onSecondary,
                                 maxLines = 1,
@@ -472,7 +543,7 @@ fun ChatScreen(
                                 // обычная кнопка отправки
                                 IconButton(
                                     onClick = {
-                                        if (userInput.isNotBlank()) {
+                                        if (userInput.isNotBlank() && selectedModel.isNotEmpty()) {
                                             // Просто отправляем сообщение - ChatViewModel сам обработает
                                             // случай отсутствия активного чата через requestNewChat
                                             chatViewModel.sendMessage(userInput)
@@ -480,7 +551,7 @@ fun ChatScreen(
                                             keyboardController?.hide()
                                         }
                                     },
-                                    enabled = userInput.isNotBlank()
+                                    enabled = userInput.isNotBlank() && selectedModel.isNotEmpty()
                                 ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.ic_send_message),
@@ -501,13 +572,13 @@ fun ChatScreen(
                                 }
                             }
                         },
-                        readOnly = isWriting,
+                        readOnly = isWriting || selectedModel.isEmpty(),
                         singleLine = false,
                         maxLines = 10,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(
                             onSend = {
-                                if (userInput.isNotBlank() && !isWriting) {
+                                if (userInput.isNotBlank() && !isWriting && selectedModel.isNotEmpty()) {
                                     // Просто отправляем сообщение - ChatViewModel сам обработает
                                     // случай отсутствия активного чата через requestNewChat
                                     chatViewModel.sendMessage(userInput)

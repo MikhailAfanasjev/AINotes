@@ -25,7 +25,8 @@ fun NavGraph(
     modifier: Modifier = Modifier,
     chatViewModel: ChatViewModel = hiltViewModel(),
     notesViewModel: NotesViewModel = hiltViewModel(),
-    initialDarkTheme: Boolean
+    initialDarkTheme: Boolean,
+    onOpenSettings: () -> Unit = {}
 ) {
     CompositionLocalProvider(LocalNavigationController provides navController) {
         Surface(
@@ -41,7 +42,8 @@ fun NavGraph(
                     ChatScreen(
                         navController = navController,
                         chatViewModel = chatViewModel,
-                        initialDarkTheme = initialDarkTheme
+                        initialDarkTheme = initialDarkTheme,
+                        onOpenSettings = onOpenSettings
                     )
                 }
 

@@ -67,10 +67,12 @@ fun SettingsDrawer(
     chatListViewModel: ChatListViewModel = hiltViewModel(),
     notesViewModel: NotesViewModel = hiltViewModel(),
     chatMessages: List<com.example.ainotes.chatGPT.Message> = emptyList(),
-    currentRoute: String = ""
+    currentRoute: String = "",
+    expandModels: Boolean = false
 ) {
     val selectedModel by chatViewModel.selectedModel.collectAsState()
-    val models = chatViewModel.availableModels
+    val models by chatViewModel.availableModels.collectAsState()
+    val isLoadingModels by chatViewModel.isLoadingModels.collectAsState()
     val isModelInitializing by chatViewModel.isModelInitializing.collectAsState()
     val modelInitialized by chatViewModel.modelInitialized.collectAsState()
     val notes by notesViewModel.notes.collectAsState()
@@ -110,6 +112,13 @@ fun SettingsDrawer(
 
     // Состояние для сворачивания/разворачивания списка моделей
     var isModelListExpanded by remember { mutableStateOf(false) }
+
+    // Автоматически раскрываем список моделей при expandModels = true
+    androidx.compose.runtime.LaunchedEffect(isVisible, expandModels) {
+        if (isVisible && expandModels) {
+            isModelListExpanded = true
+        }
+    }
 
     // Анимация для плавного появления/исчезновения
     val animationProgress by animateFloatAsState(
@@ -204,7 +213,31 @@ fun SettingsDrawer(
                                     )
                                 }
 
+                                selectedModel.isEmpty() -> {
+                                    // Модель не выбрана
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_error),
+                                        contentDescription = "Модель не загружена",
+                                        modifier = Modifier.size(20.dp),
+                                        tint = colorScheme.error
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = "Модель не загружена",
+                                            color = colorScheme.onBackground,
+                                            fontSize = 16.sp
+                                        )
+                                        Text(
+                                            text = "Выберите модель для загрузки",
+                                            color = colorScheme.onBackground.copy(alpha = 0.7f),
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+
                                 !modelInitialized -> {
+                                    // Модель выбрана, но не инициализирована (ошибка)
                                     Icon(
                                         painter = painterResource(id = R.drawable.ic_error),
                                         contentDescription = "Ошибка инициализации модели",
@@ -267,7 +300,7 @@ fun SettingsDrawer(
                         )
 
                         Icon(
-                            painter = painterResource(id = R.drawable.ic_arrow),
+                            painter = painterResource(id = R.drawable.ic_more),
                             contentDescription = if (isModelListExpanded) "Свернуть" else "Развернуть",
                             tint = colorScheme.onSurface,
                             modifier = Modifier
@@ -291,34 +324,85 @@ fun SettingsDrawer(
                         ) {
                             Spacer(Modifier.height(8.dp))
 
-                            models.forEach { model ->
-                                val isCurrentModel =
-                                    chatViewModel.getModelDisplayName(selectedModel) == model
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            chatViewModel.setModelByDisplayName(model)
-                                        }
-                                        .padding(vertical = 8.dp)
-                                ) {
-                                    RadioButton(
-                                        selected = isCurrentModel,
-                                        onClick = {
-                                            chatViewModel.setModelByDisplayName(model)
-                                        },
-                                        colors = RadioButtonDefaults.colors(
-                                            selectedColor = colorScheme.primary,
-                                            unselectedColor = colorScheme.tertiary
+                            when {
+                                isLoadingModels -> {
+                                    // Показываем индикатор загрузки
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 8.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_loading),
+                                            contentDescription = "Загрузка моделей",
+                                            modifier = Modifier.size(20.dp),
+                                            tint = Color.Unspecified
                                         )
-                                    )
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(
-                                        text = model,
-                                        color = colorScheme.onSurface,
-                                        fontSize = 16.sp
-                                    )
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(
+                                            text = "Загрузка моделей...",
+                                            color = colorScheme.onSurface,
+                                            fontSize = 16.sp
+                                        )
+                                    }
+                                }
+
+                                models.isEmpty() -> {
+                                    // Показываем сообщение об ошибке с кнопкой повтора
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 8.dp)
+                                    ) {
+                                        Text(
+                                            text = "Не удалось загрузить модели",
+                                            color = colorScheme.error,
+                                            fontSize = 16.sp
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            text = "Нажмите для повтора",
+                                            color = colorScheme.onSurface.copy(alpha = 0.7f),
+                                            fontSize = 14.sp,
+                                            modifier = Modifier.clickable {
+                                                chatViewModel.loadAvailableModels()
+                                            }
+                                        )
+                                    }
+                                }
+
+                                else -> {
+                                    // Показываем список моделей
+                                    models.forEach { model ->
+                                        val isCurrentModel = selectedModel == model
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    chatViewModel.setModelByDisplayName(model)
+                                                }
+                                                .padding(vertical = 8.dp)
+                                        ) {
+                                            RadioButton(
+                                                selected = isCurrentModel,
+                                                onClick = {
+                                                    chatViewModel.setModelByDisplayName(model)
+                                                },
+                                                colors = RadioButtonDefaults.colors(
+                                                    selectedColor = colorScheme.primary,
+                                                    unselectedColor = colorScheme.tertiary
+                                                )
+                                            )
+                                            Spacer(Modifier.width(12.dp))
+                                            Text(
+                                                text = model,
+                                                color = colorScheme.onSurface,
+                                                fontSize = 16.sp
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
