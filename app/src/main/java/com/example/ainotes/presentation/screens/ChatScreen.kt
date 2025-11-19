@@ -67,6 +67,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import android.util.Log
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import com.example.ainotes.presentation.components.ChatMessageItem
 import com.example.ainotes.presentation.components.FilterChip
 import com.example.ainotes.utils.scrollToBottomWithOverflow
@@ -386,21 +390,45 @@ fun ChatScreen(
                                 style = MaterialTheme.typography.headlineMedium,
                                 color = colorScheme.onSecondary
                             )
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(18.dp))
                             Text(
                                 text = "Для начала работы выберите AI модель",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = colorScheme.onSecondary.copy(alpha = 0.7f)
                             )
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(18.dp))
 
                             // Кнопка открытия настроек
+                            val textMeasurer = rememberTextMeasurer()
+                            val buttonText = "Выберите модель"
+                            val textStyle = MaterialTheme.typography.titleMedium
+
+                            // Измеряем ширину текста
+                            val textLayoutResult = textMeasurer.measure(
+                                text = buttonText,
+                                style = textStyle
+                            )
+
+                            // Вычисляем необходимую ширину: текст + иконка + отступы
+                            val iconWidth = 20.dp
+                            val spacerWidth = 8.dp
+                            val buttonPadding = 32.dp // внутренние отступы кнопки
+                            val textWidth =
+                                with(LocalDensity.current) { textLayoutResult.size.width.toDp() }
+                            val requiredWidth = textWidth + iconWidth + spacerWidth + buttonPadding
+                            val availableWidth = LocalDensity.current.run {
+                                (LocalConfiguration.current.screenWidthDp * 0.6f).dp
+                            }
+
+                            // Если текст не влезает в одну строку, увеличиваем высоту
+                            val buttonHeight = if (requiredWidth > availableWidth) 80.dp else 64.dp
+
                             androidx.compose.material3.Button(
                                 onClick = onOpenSettings,
                                 modifier = Modifier
                                     .fillMaxWidth(0.6f)
-                                    .height(56.dp),
+                                    .height(buttonHeight),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                                     containerColor = colorScheme.onTertiary,
@@ -415,9 +443,10 @@ fun ChatScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Выберите модель",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = White
+                                    text = buttonText,
+                                    style = textStyle,
+                                    color = White,
+                                    maxLines = 2
                                 )
                             }
 
@@ -511,6 +540,7 @@ fun ChatScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
                 ) {
                     TextField(
                         value = userInput,

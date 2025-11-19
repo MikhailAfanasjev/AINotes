@@ -8,6 +8,8 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,7 +31,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -54,6 +58,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.activity.compose.BackHandler
+import com.example.ainotes.utils.ConnectionSettingsManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -77,6 +85,16 @@ fun SettingsDrawer(
     val modelInitialized by chatViewModel.modelInitialized.collectAsState()
     val notes by notesViewModel.notes.collectAsState()
     val colorScheme = MaterialTheme.colorScheme
+
+    // Получаем ширину экрана и вычисляем 75%, но не более 350dp
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp.dp
+    val calculatedWidth = screenWidthDp * 0.75f
+    val drawerWidth = if (calculatedWidth > 350.dp) 350.dp else calculatedWidth
+
+    // Connection settings manager
+    val context = LocalContext.current
+    val connectionSettingsManager = remember { ConnectionSettingsManager(context) }
 
     // Chat list states
     val chatList by chatListViewModel.chatList.collectAsState()
@@ -113,6 +131,21 @@ fun SettingsDrawer(
     // Состояние для сворачивания/разворачивания списка моделей
     var isModelListExpanded by remember { mutableStateOf(false) }
 
+    // Состояние для сворачивания/разворачивания настроек подключения
+    var isConnectionSettingsExpanded by remember { mutableStateOf(false) }
+
+    // Состояние для выбора типа подключения (true = LM Studio, false = API ключ)
+    var isLMStudioMode by remember { mutableStateOf(connectionSettingsManager.isLMStudioMode()) }
+
+    // Состояние для выбора локальной сети или NGROK (true = локальная сеть, false = NGROK)
+    var isLocalNetworkMode by remember { mutableStateOf(connectionSettingsManager.isLocalNetworkMode()) }
+
+    // Состояния для текстовых полей - загружаем из защищенного хранилища
+    var localNetworkUrl by remember { mutableStateOf(connectionSettingsManager.getLocalNetworkUrl()) }
+    var ngrokLocalUrl by remember { mutableStateOf(connectionSettingsManager.getNgrokLocalUrl()) }
+    var ngrokApiUrl by remember { mutableStateOf(connectionSettingsManager.getNgrokApiUrl()) }
+    var ngrokApiKey by remember { mutableStateOf(connectionSettingsManager.getNgrokApiKey()) }
+
     // Автоматически раскрываем список моделей при expandModels = true
     androidx.compose.runtime.LaunchedEffect(isVisible, expandModels) {
         if (isVisible && expandModels) {
@@ -134,12 +167,27 @@ fun SettingsDrawer(
         label = "background_alpha"
     )
 
-    // Анимация поворота стрелки
+    // Анимация поворота стрелки для моделей
     val arrowRotation by animateFloatAsState(
         targetValue = if (isModelListExpanded) 180f else 0f,
         animationSpec = tween(durationMillis = 200),
         label = "arrow_rotation"
     )
+
+    // Анимация поворота стрелки для настроек подключения
+    val connectionArrowRotation by animateFloatAsState(
+        targetValue = if (isConnectionSettingsExpanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "connection_arrow_rotation"
+    )
+
+    // Состояние скролла для контента
+    val scrollState = rememberScrollState()
+
+    // Обработка нажатия кнопки "назад"
+    BackHandler(enabled = isVisible) {
+        onDismiss()
+    }
 
     if (isVisible || animationProgress > 0f) {
         Box(
@@ -151,9 +199,9 @@ fun SettingsDrawer(
             Card(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(350.dp)
+                    .width(drawerWidth)
                     .align(Alignment.CenterStart)
-                    .offset(x = (-350.dp * (1f - animationProgress)))
+                    .offset(x = (-drawerWidth * (1f - animationProgress)))
                     .shadow(8.dp)
                     .clickable { },
                 shape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp),
@@ -163,9 +211,14 @@ fun SettingsDrawer(
                     modifier = Modifier
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(16.dp)
-                        .graphicsLayer(alpha = animationProgress)
                 ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(scrollState)
+                            .padding(16.dp)
+                            .graphicsLayer(alpha = animationProgress)
+                    ) {
                     // Заголовок
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -410,36 +463,402 @@ fun SettingsDrawer(
 
                     Spacer(Modifier.height(24.dp))
 
-                    // Удалить заметки
-                    if (currentRoute == "notes" && notes.isNotEmpty()) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                    // Настройки подключения
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                isConnectionSettingsExpanded = !isConnectionSettingsExpanded
+                            }
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "Настройки подключения",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_more),
+                            contentDescription = if (isConnectionSettingsExpanded) "Свернуть" else "Развернуть",
+                            tint = colorScheme.onSurface,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    notesViewModel.deleteAllNotes()
-                                    onDismiss()
-                                }
-                                .padding(vertical = 12.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_remove),
-                                contentDescription = "Удалить заметки",
-                                tint = colorScheme.error,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(Modifier.width(16.dp))
-                            Text(
-                                text = "Удалить все заметки",
-                                color = colorScheme.error,
-                                fontSize = 16.sp
-                            )
-                        }
-                        Spacer(Modifier.height(12.dp))
+                                .size(20.dp)
+                                .rotate(connectionArrowRotation)
+                        )
                     }
 
-                    // Список чатов (показываем только для экрана чата)
-                    if (currentRoute == "chat") {
+                    // Анимированные настройки подключения
+                    AnimatedVisibility(
+                        visible = isConnectionSettingsExpanded,
+                        enter = expandVertically(
+                            animationSpec = tween(durationMillis = 300)
+                        ),
+                        exit = shrinkVertically(
+                            animationSpec = tween(durationMillis = 300)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(start = 12.dp)
+                        ) {
+                            Spacer(Modifier.height(8.dp))
+
+                            // Подключение к LM Studio
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        isLMStudioMode = true
+                                        connectionSettingsManager.setConnectionMode(
+                                            ConnectionSettingsManager.CONNECTION_MODE_LM_STUDIO
+                                        )
+                                        // Перезагружаем модели при смене режима
+                                        chatViewModel.loadAvailableModels()
+                                    }
+                                    .padding(vertical = 8.dp)
+                            ) {
+                                RadioButton(
+                                    selected = isLMStudioMode,
+                                    onClick = {
+                                        isLMStudioMode = true
+                                        connectionSettingsManager.setConnectionMode(
+                                            ConnectionSettingsManager.CONNECTION_MODE_LM_STUDIO
+                                        )
+                                        // Перезагружаем модели при смене режима
+                                        chatViewModel.loadAvailableModels()
+                                    },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = colorScheme.primary,
+                                        unselectedColor = colorScheme.tertiary
+                                    )
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    text = "Подключение к LM Studio",
+                                    color = colorScheme.onSurface,
+                                    fontSize = 16.sp
+                                )
+                            }
+
+                            // Подменю для LM Studio
+                            AnimatedVisibility(
+                                visible = isLMStudioMode,
+                                enter = expandVertically(
+                                    animationSpec = tween(durationMillis = 300)
+                                ),
+                                exit = shrinkVertically(
+                                    animationSpec = tween(durationMillis = 300)
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 36.dp, top = 8.dp)
+                                ) {
+                                    // Подключение в локальной сети
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                isLocalNetworkMode = true
+                                                connectionSettingsManager.setLMStudioMode(
+                                                    ConnectionSettingsManager.LM_STUDIO_MODE_LOCAL
+                                                )
+                                                // Перезагружаем модели при смене режима
+                                                chatViewModel.loadAvailableModels()
+                                            }
+                                            .padding(vertical = 8.dp)
+                                    ) {
+                                        RadioButton(
+                                            selected = isLocalNetworkMode,
+                                            onClick = {
+                                                isLocalNetworkMode = true
+                                                connectionSettingsManager.setLMStudioMode(
+                                                    ConnectionSettingsManager.LM_STUDIO_MODE_LOCAL
+                                                )
+                                                // Перезагружаем модели при смене режима
+                                                chatViewModel.loadAvailableModels()
+                                            },
+                                            colors = RadioButtonDefaults.colors(
+                                                selectedColor = colorScheme.primary,
+                                                unselectedColor = colorScheme.tertiary
+                                            ),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(
+                                            text = "Подключение в локальной сети",
+                                            color = colorScheme.onSurface,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+
+                                    // Поля для локальной сети
+                                    AnimatedVisibility(
+                                        visible = isLocalNetworkMode,
+                                        enter = expandVertically(
+                                            animationSpec = tween(durationMillis = 200)
+                                        ),
+                                        exit = shrinkVertically(
+                                            animationSpec = tween(durationMillis = 200)
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(start = 32.dp, top = 4.dp, bottom = 8.dp)
+                                        ) {
+                                            OutlinedTextField(
+                                                value = localNetworkUrl,
+                                                onValueChange = {
+                                                    localNetworkUrl = it
+                                                    connectionSettingsManager.setLocalNetworkUrl(it)
+                                                    // Перезагружаем модели при изменении URL
+                                                    if (it.isNotEmpty()) {
+                                                        chatViewModel.loadAvailableModels()
+                                                    }
+                                                },
+                                                label = { Text("URL", fontSize = 12.sp) },
+                                                placeholder = {
+                                                    Text(
+                                                        "http://192.168.1.83:1234",
+                                                        fontSize = 12.sp
+                                                    )
+                                                },
+                                                singleLine = true,
+                                                colors = TextFieldDefaults.colors(
+                                                    focusedContainerColor = colorScheme.surface,
+                                                    unfocusedContainerColor = colorScheme.surface,
+                                                    focusedIndicatorColor = colorScheme.primary,
+                                                    unfocusedIndicatorColor = colorScheme.onSurface.copy(
+                                                        alpha = 0.3f
+                                                    )
+                                                ),
+                                                modifier = Modifier.fillMaxWidth(),
+                                                textStyle = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(Modifier.height(8.dp))
+
+                                    // Подключение с помощью NGROK
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                isLocalNetworkMode = false
+                                                connectionSettingsManager.setLMStudioMode(
+                                                    ConnectionSettingsManager.LM_STUDIO_MODE_NGROK
+                                                )
+                                                // Перезагружаем модели при смене режима
+                                                chatViewModel.loadAvailableModels()
+                                            }
+                                            .padding(vertical = 8.dp)
+                                    ) {
+                                        RadioButton(
+                                            selected = !isLocalNetworkMode,
+                                            onClick = {
+                                                isLocalNetworkMode = false
+                                                connectionSettingsManager.setLMStudioMode(
+                                                    ConnectionSettingsManager.LM_STUDIO_MODE_NGROK
+                                                )
+                                                // Перезагружаем модели при смене режима
+                                                chatViewModel.loadAvailableModels()
+                                            },
+                                            colors = RadioButtonDefaults.colors(
+                                                selectedColor = colorScheme.primary,
+                                                unselectedColor = colorScheme.tertiary
+                                            ),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(
+                                            text = "Подключение с помощью NGROK",
+                                            color = colorScheme.onSurface,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+
+                                    // Поля для NGROK
+                                    AnimatedVisibility(
+                                        visible = !isLocalNetworkMode,
+                                        enter = expandVertically(
+                                            animationSpec = tween(durationMillis = 200)
+                                        ),
+                                        exit = shrinkVertically(
+                                            animationSpec = tween(durationMillis = 200)
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(start = 32.dp, top = 4.dp, bottom = 8.dp)
+                                        ) {
+                                            OutlinedTextField(
+                                                value = ngrokLocalUrl,
+                                                onValueChange = {
+                                                    ngrokLocalUrl = it
+                                                    connectionSettingsManager.setNgrokLocalUrl(it)
+                                                },
+                                                label = { Text("Локальный URL", fontSize = 12.sp) },
+                                                placeholder = {
+                                                    Text(
+                                                        "http://192.168.1.83:1234",
+                                                        fontSize = 12.sp
+                                                    )
+                                                },
+                                                singleLine = true,
+                                                colors = TextFieldDefaults.colors(
+                                                    focusedContainerColor = colorScheme.surface,
+                                                    unfocusedContainerColor = colorScheme.surface,
+                                                    focusedIndicatorColor = colorScheme.primary,
+                                                    unfocusedIndicatorColor = colorScheme.onSurface.copy(
+                                                        alpha = 0.3f
+                                                    )
+                                                ),
+                                                modifier = Modifier.fillMaxWidth(),
+                                                textStyle = MaterialTheme.typography.bodySmall
+                                            )
+
+                                            Spacer(Modifier.height(8.dp))
+
+                                            OutlinedTextField(
+                                                value = ngrokApiUrl,
+                                                onValueChange = {
+                                                    ngrokApiUrl = it
+                                                    connectionSettingsManager.setNgrokApiUrl(it)
+                                                },
+                                                label = { Text("NGROK API URL", fontSize = 12.sp) },
+                                                placeholder = {
+                                                    Text(
+                                                        "https://api.ngrok.com/tunnels",
+                                                        fontSize = 12.sp
+                                                    )
+                                                },
+                                                singleLine = true,
+                                                colors = TextFieldDefaults.colors(
+                                                    focusedContainerColor = colorScheme.surface,
+                                                    unfocusedContainerColor = colorScheme.surface,
+                                                    focusedIndicatorColor = colorScheme.primary,
+                                                    unfocusedIndicatorColor = colorScheme.onSurface.copy(
+                                                        alpha = 0.3f
+                                                    )
+                                                ),
+                                                modifier = Modifier.fillMaxWidth(),
+                                                textStyle = MaterialTheme.typography.bodySmall
+                                            )
+
+                                            Spacer(Modifier.height(8.dp))
+
+                                            OutlinedTextField(
+                                                value = ngrokApiKey,
+                                                onValueChange = {
+                                                    ngrokApiKey = it
+                                                    connectionSettingsManager.setNgrokApiKey(it)
+                                                },
+                                                label = { Text("API KEY", fontSize = 12.sp) },
+                                                placeholder = {
+                                                    Text(
+                                                        "Введите API ключ NGROK",
+                                                        fontSize = 12.sp
+                                                    )
+                                                },
+                                                singleLine = true,
+                                                colors = TextFieldDefaults.colors(
+                                                    focusedContainerColor = colorScheme.surface,
+                                                    unfocusedContainerColor = colorScheme.surface,
+                                                    focusedIndicatorColor = colorScheme.primary,
+                                                    unfocusedIndicatorColor = colorScheme.onSurface.copy(
+                                                        alpha = 0.3f
+                                                    )
+                                                ),
+                                                modifier = Modifier.fillMaxWidth(),
+                                                textStyle = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            // Подключение через API ключ
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        isLMStudioMode = false
+                                        connectionSettingsManager.setConnectionMode(
+                                            ConnectionSettingsManager.CONNECTION_MODE_API_KEY
+                                        )
+                                        // Перезагружаем модели при смене режима
+                                        chatViewModel.loadAvailableModels()
+                                    }
+                                    .padding(vertical = 8.dp)
+                            ) {
+                                RadioButton(
+                                    selected = !isLMStudioMode,
+                                    onClick = {
+                                        isLMStudioMode = false
+                                        connectionSettingsManager.setConnectionMode(
+                                            ConnectionSettingsManager.CONNECTION_MODE_API_KEY
+                                        )
+                                        // Перезагружаем модели при смене режима
+                                        chatViewModel.loadAvailableModels()
+                                    },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = colorScheme.primary,
+                                        unselectedColor = colorScheme.tertiary
+                                    )
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    text = "Подключение через API ключ",
+                                    color = colorScheme.onSurface,
+                                    fontSize = 16.sp
+                                )
+                            }
+                        }
+                    }
+
+                        Spacer(Modifier.height(24.dp))
+
+                        // Удалить заметки
+                        if (currentRoute == "notes" && notes.isNotEmpty()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        notesViewModel.deleteAllNotes()
+                                        onDismiss()
+                                    }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_remove),
+                                    contentDescription = "Удалить заметки",
+                                    tint = colorScheme.error,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(Modifier.width(16.dp))
+                                Text(
+                                    text = "Удалить все заметки",
+                                    color = colorScheme.error,
+                                    fontSize = 16.sp
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                        }
+
+                        // Список чатов - заголовок
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
@@ -494,30 +913,22 @@ fun SettingsDrawer(
 
                         Spacer(Modifier.height(12.dp))
 
-                        // Фильтруем только чаты с сообщениями
-                        val nonEmptyChats = chatList.filter { it.messageCount > 0 }
+                        // Список чатов (показываем только для экрана чата)
+                        if (currentRoute == "chat") {
+                            // Фильтруем только чаты с сообщениями
+                            val nonEmptyChats = chatList.filter { it.messageCount > 0 }
 
-                        // Список чатов до самого низа экрана
-                        if (nonEmptyChats.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                contentAlignment = Alignment.Center
-                            ) {
+                            // Список чатов
+                            if (nonEmptyChats.isEmpty()) {
                                 Text(
                                     text = "Нет чатов",
                                     color = colorScheme.onSurface.copy(alpha = 0.6f),
-                                    style = MaterialTheme.typography.bodyMedium
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(vertical = 16.dp)
                                 )
-                            }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                            ) {
-                                items(nonEmptyChats) { chat ->
+                            } else {
+                                // Отображаем чаты в прокручиваемой колонке
+                                nonEmptyChats.forEach { chat ->
                                     // Чат считается выбранным, если он соответствует ЛЮБОМУ из источников истины
                                     val isSelected =
                                         chat.id == currentChatId || chat.id == chatViewModelChatId

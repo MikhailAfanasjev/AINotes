@@ -15,15 +15,11 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 
-class BaseUrlManager(context: Context) {
+class BaseUrlManager(private val context: Context) {
 
     companion object {
         private const val PREFS_NAME = "secure_prefs"
         private const val KEY_BASE_URL = "key_base_url"
-        private const val DEFAULT_URL = "https://9105-84-17-46-88.ngrok-free.app"
-
-        private const val NGROK_API_URL = "https://api.ngrok.com/tunnels"
-        private const val API_KEY = "2vwuX6rCb0W5FrInoQ9yPPCr7wt_3qvbbxb9T4kLyjtwDRNoL"
         private const val API_TIMEOUT = 15_000
 
         private const val TAG = ">>>BaseUrlManager"
@@ -42,13 +38,46 @@ class BaseUrlManager(context: Context) {
     // Скоуп для фоновых корутин; SupervisorJob чтобы одна ошибка не отменяла другие
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    // Используем ConnectionSettingsManager для получения настроек подключения
+    private val connectionSettingsManager by lazy { ConnectionSettingsManager(context) }
+
     fun getBaseUrl(): String {
-        val baseUrl = sharedPrefs.getString(KEY_BASE_URL, DEFAULT_URL) ?: DEFAULT_URL
-        return baseUrl
+        // Проверяем режим подключения
+        return when {
+            // Если используем LM Studio - получаем URL из ConnectionSettingsManager
+            connectionSettingsManager.isLMStudioMode() -> {
+                val activeUrl = connectionSettingsManager.getActiveUrl()
+                Log.d(TAG, "🌐 Режим LM Studio. Active URL: $activeUrl")
+
+                // Если используем NGROK - проверяем сохраненный публичный URL
+                if (!connectionSettingsManager.isLocalNetworkMode()) {
+                    val savedNgrokUrl = sharedPrefs.getString(KEY_BASE_URL, "") ?: ""
+                    if (savedNgrokUrl.isNotEmpty()) {
+                        Log.d(TAG, "🔗 Используем сохраненный NGROK URL: $savedNgrokUrl")
+                        return savedNgrokUrl
+                    }
+                }
+
+                activeUrl
+            }
+            // Если используем API ключ - возвращаем стандартный URL OpenAI
+            else -> {
+                Log.d(TAG, "🔑 Режим API ключ. Используем OpenAI URL")
+                "https://api.openai.com"
+            }
+        }
     }
 
-    private fun setBaseUrl(url: String) {
+    fun setBaseUrl(url: String) {
         sharedPrefs.edit().putString(KEY_BASE_URL, url).apply()
+    }
+
+    private fun getNgrokApiUrl(): String {
+        return connectionSettingsManager.getNgrokApiUrl()
+    }
+
+    private fun getNgrokApiKey(): String {
+        return connectionSettingsManager.getNgrokApiKey()
     }
 
     /**
@@ -76,16 +105,24 @@ class BaseUrlManager(context: Context) {
      * Выполняет HTTP-запрос к Ngrok API и возвращает первый найденный HTTPS public_url
      */
     private suspend fun fetchNgrokHttpsTunnel(): String? = withContext(Dispatchers.IO) {
-        Log.d(TAG, "🌐 fetchNgrokHttpsTunnel(): делаем GET $NGROK_API_URL")
+        val ngrokApiUrl = getNgrokApiUrl()
+        val ngrokApiKey = getNgrokApiKey()
+
+        if (ngrokApiUrl.isEmpty() || ngrokApiKey.isEmpty()) {
+            Log.w(TAG, "⚠️ NGROK API URL или API KEY не настроены")
+            return@withContext null
+        }
+
+        Log.d(TAG, "🌐 fetchNgrokHttpsTunnel(): делаем GET $ngrokApiUrl")
         var connection: HttpURLConnection? = null
         try {
-            val url = URL(NGROK_API_URL)
+            val url = URL(ngrokApiUrl)
 
             connection = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = API_TIMEOUT
                 readTimeout = API_TIMEOUT
-                setRequestProperty("Authorization", "Bearer $API_KEY")
+                setRequestProperty("Authorization", "Bearer $ngrokApiKey")
                 setRequestProperty("Ngrok-Version", "2")
             }
             val code = connection.responseCode
@@ -120,14 +157,22 @@ class BaseUrlManager(context: Context) {
      */
     suspend fun refreshPublicUrl(): String? = withContext(Dispatchers.IO) {
         Log.d(TAG, "🔄 refreshPublicUrl(): попытка обновить URL из Ngrok API")
+        val ngrokApiUrl = getNgrokApiUrl()
+        val ngrokApiKey = getNgrokApiKey()
+
+        if (ngrokApiUrl.isEmpty() || ngrokApiKey.isEmpty()) {
+            Log.w(TAG, "⚠️ NGROK API URL или API KEY не настроены")
+            return@withContext null
+        }
+
         var connection: HttpURLConnection? = null
         try {
-            val url = URL(NGROK_API_URL)
+            val url = URL(ngrokApiUrl)
             connection = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = API_TIMEOUT
                 readTimeout = API_TIMEOUT
-                setRequestProperty("Authorization", "Bearer $API_KEY")
+                setRequestProperty("Authorization", "Bearer $ngrokApiKey")
                 setRequestProperty("Ngrok-Version", "2")
             }
             if (connection.responseCode == HttpURLConnection.HTTP_OK) {

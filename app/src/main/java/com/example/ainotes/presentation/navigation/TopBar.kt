@@ -161,7 +161,8 @@ fun TopBar(
                     actions = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(end = 8.dp)
+                            modifier = Modifier
+                                .padding(horizontal = 8.dp, vertical = 12.dp)
                         ) {
                             when {
                                 isModelInitializing -> {
@@ -179,14 +180,10 @@ fun TopBar(
                                         painter = painterResource(id = R.drawable.ic_loading),
                                         contentDescription = "Загрузка модели",
                                         modifier = Modifier
-                                            .size(16.dp)
+                                            .size(24.dp)
                                             .rotate(rotationAngle),
                                         tint = Color.Unspecified
                                     )
-                                }
-
-                                selectedModel.isEmpty() -> {
-                                    // Модель не выбрана - не показываем иконку
                                 }
 
                                 !modelInitialized -> {
@@ -195,7 +192,7 @@ fun TopBar(
                                         painter = painterResource(id = R.drawable.ic_error),
                                         contentDescription = "Ошибка инициализации модели",
                                         modifier = Modifier
-                                            .size(16.dp),
+                                            .size(24.dp),
                                         tint = Color.Unspecified
                                     )
                                 }
@@ -205,7 +202,7 @@ fun TopBar(
                                         painter = painterResource(id = R.drawable.ic_online),
                                         contentDescription = "Модель готова",
                                         modifier = Modifier
-                                            .size(16.dp),
+                                            .size(24.dp),
                                         tint = Color.Unspecified
                                     )
                                 }
