@@ -1,6 +1,7 @@
 package com.example.ainotes.presentation.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,12 +9,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -55,16 +58,25 @@ fun FormattedText(
                         )
                     }
                     is MessageSegment.Code -> {
-                        NoteSelectionContainer(
-                            text = segment.content.trim(),
-                            onCreateNote = onCreateNote,
-                            textColor = textColor,
-                            backgroundColor = Black,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Normal,
-                            fontStyle = FontStyle.Normal,
-                            isCode = true
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Black)
+                                .horizontalScroll(rememberScrollState())
+                                .padding(12.dp)
+                        ) {
+                            NoteSelectionContainer(
+                                text = segment.content.trim(),
+                                onCreateNote = onCreateNote,
+                                textColor = textColor,
+                                backgroundColor = Color.Transparent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Normal,
+                                fontStyle = FontStyle.Normal,
+                                isCode = true
+                            )
+                        }
                     }
                     is MessageSegment.Header -> {
                         val (fontSize, fontWeight, topPadding) = when (segment.level) {
@@ -160,10 +172,9 @@ fun FormattedText(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(
-                                        color = Black,
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Black)
+                                    .horizontalScroll(rememberScrollState())
                                     .padding(12.dp)
                             ) {
                                 Text(
@@ -171,7 +182,7 @@ fun FormattedText(
                                     color = textColor,
                                     fontFamily = FontFamily.Monospace,
                                     fontSize = 12.sp,
-                                    modifier = Modifier.fillMaxWidth()
+                                    softWrap = false
                                 )
                             }
                         }

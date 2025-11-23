@@ -42,11 +42,25 @@ fun NoteSelectionContainer(
 
     AndroidView(
         modifier = modifier
-            .background(backgroundColor, RoundedCornerShape(if (isCode) 8.dp else 0.dp))
-            .padding(if (isCode) 8.dp else 0.dp),
+            .then(
+                if (backgroundColor != Color.Transparent && !isCode) {
+                    Modifier.background(
+                        backgroundColor,
+                        RoundedCornerShape(if (isCode) 8.dp else 0.dp)
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .padding(if (isCode) 0.dp else 0.dp),
         factory = { ctx ->
             TextView(ctx).apply {
                 setTextIsSelectable(true)
+                // Для блоков кода отключаем перенос текста
+                if (isCode) {
+                    setSingleLine(false)
+                    setHorizontallyScrolling(true)
+                }
                 customSelectionActionModeCallback = object : ActionMode.Callback {
                     override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
                         menu.clear()
@@ -90,7 +104,10 @@ fun NoteSelectionContainer(
         update = { tv ->
             // Переставляем цвет текста и фон на каждый релэйаут
             tv.setTextColor(textColor.toArgb())
-            tv.setBackgroundColor(backgroundColor.toArgb())
+            // Для блоков кода фон устанавливается на уровне Box, поэтому делаем TextView прозрачным
+            tv.setBackgroundColor(
+                if (isCode) android.graphics.Color.TRANSPARENT else backgroundColor.toArgb()
+            )
 
             // Применяем размер шрифта
             tv.textSize = fontSize.value
