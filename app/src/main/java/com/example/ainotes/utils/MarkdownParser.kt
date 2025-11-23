@@ -6,13 +6,26 @@ object MarkdownParser {
      * Разбирает входную строку с Markdown-разметкой на список сегментов
      */
     fun parseSegments(input: String): List<MessageSegment> {
+        // Сначала обрабатываем <think> блоки, так как они могут быть многострочными
+        val processedInput = processThinkBlocks(input)
+
         val segments = mutableListOf<MessageSegment>()
-        val lines = input.split("\n")
+        val lines = processedInput.lines
         var i = 0
 
         while (i < lines.size) {
             val line = lines[i]
             val trimmedLine = line.trim()
+
+            // Проверяем на блок think (уже обработанный)
+            if (trimmedLine.startsWith("<<<THINK_BLOCK>>>")) {
+                val thinkIndex = trimmedLine.substringAfter("<<<THINK_BLOCK>>>").toIntOrNull()
+                if (thinkIndex != null && thinkIndex < processedInput.thinkBlocks.size) {
+                    segments.add(processedInput.thinkBlocks[thinkIndex])
+                }
+                i++
+                continue
+            }
 
             // Проверяем на блок кода
             if (trimmedLine.startsWith("```")) {
@@ -87,6 +100,7 @@ object MarkdownParser {
 
                     // Проверяем, не является ли строка специальным элементом
                     if (currentTrimmed.startsWith("```") ||
+                        currentTrimmed.startsWith("<<<THINK_BLOCK>>>") ||
                         currentTrimmed.matches(Regex("^-{3,}\\s*$")) ||
                         Regex("^#{1,6}\\s+").find(currentTrimmed) != null ||
                         currentTrimmed.startsWith("> ") ||
@@ -113,5 +127,79 @@ object MarkdownParser {
         }
 
         return segments
+    }
+
+    /**
+     * Класс для хранения результата обработки think-блоков
+     */
+    private data class ProcessedInput(
+        val lines: List<String>,
+        val thinkBlocks: List<MessageSegment.Think>
+    )
+
+    /**
+     * Обрабатывает блоки <think>...</think> и текстовый формат "Thought for X seconds"
+     * и заменяет их на плейсхолдеры
+     */
+    private fun processThinkBlocks(input: String): ProcessedInput {
+        val thinkBlocks = mutableListOf<MessageSegment.Think>()
+        var processedText = input
+        var blockIndex = 0
+
+        // 1. Обрабатываем <think>...</think> теги
+        val thinkRegex = Regex("<think>([\\s\\S]*?)</think>", RegexOption.IGNORE_CASE)
+        thinkRegex.findAll(input).forEach { match ->
+            val thinkContent = match.groupValues[1].trim()
+            thinkBlocks.add(MessageSegment.Think(thinkContent, 0f))
+            processedText = processedText.replaceFirst(
+                match.value,
+                "\n<<<THINK_BLOCK>>>$blockIndex\n"
+            )
+            blockIndex++
+        }
+
+        // 2. Обрабатываем текстовый формат "Thought for X seconds"
+        // Паттерн: "Thought for X seconds" за которым следует содержимое до двойной пустой строки
+        val thoughtPattern = Regex(
+            "Thought for ([\\d.]+) seconds?\\s*\\n\\s*\\n([\\s\\S]*?)(?=\\n\\s*\\n|$)",
+            RegexOption.IGNORE_CASE
+        )
+
+        // Собираем все совпадения
+        val matches = thoughtPattern.findAll(processedText).toList()
+
+        // Создаем временный список для блоков с правильными индексами
+        val tempBlocks = mutableListOf<Pair<Int, MessageSegment.Think>>()
+
+        // Обрабатываем с конца, чтобы не нарушить позиции при замене
+        matches.reversed().forEach { match ->
+            val durationStr = match.groupValues[1]
+            val duration = durationStr.toFloatOrNull() ?: 0f
+            val thinkContent = match.groupValues[2].trim()
+
+            // Сохраняем индекс и блок
+            val currentIndex = blockIndex
+            tempBlocks.add(0, currentIndex to MessageSegment.Think(thinkContent, duration))
+
+            // Заменяем на плейсхолдер
+            val startPos = match.range.first
+            val endPos = match.range.last + 1
+
+            processedText = processedText.substring(0, startPos) +
+                    "<<<THINK_BLOCK>>>$currentIndex" +
+                    processedText.substring(minOf(endPos, processedText.length))
+
+            blockIndex++
+        }
+
+        // Добавляем блоки в правильном порядке
+        tempBlocks.forEach { (_, block) ->
+            thinkBlocks.add(block)
+        }
+
+        return ProcessedInput(
+            lines = processedText.split("\n"),
+            thinkBlocks = thinkBlocks
+        )
     }
 }

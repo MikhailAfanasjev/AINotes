@@ -1,23 +1,35 @@
 package com.example.ainotes.presentation.components
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -30,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import com.example.ainotes.utils.MessageSegment
 import com.example.ainotes.utils.parseMarkdownText
 import com.example.ainotes.presentation.ui.theme.Black
+import com.example.linguareader.R
 
 @Composable
 fun FormattedText(
@@ -58,25 +71,20 @@ fun FormattedText(
                         )
                     }
                     is MessageSegment.Code -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Black)
-                                .horizontalScroll(rememberScrollState())
-                                .padding(12.dp)
-                        ) {
-                            NoteSelectionContainer(
-                                text = segment.content.trim(),
-                                onCreateNote = onCreateNote,
-                                textColor = textColor,
-                                backgroundColor = Color.Transparent,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Normal,
-                                fontStyle = FontStyle.Normal,
-                                isCode = true
-                            )
-                        }
+                        CodeBlockWithHeader(
+                            code = segment.content.trim(),
+                            language = segment.language,
+                            textColor = textColor,
+                            onCreateNote = onCreateNote
+                        )
+                    }
+                    is MessageSegment.Think -> {
+                        ThinkBlockWithHeader(
+                            content = segment.content.trim(),
+                            durationSeconds = segment.durationSeconds,
+                            textColor = textColor,
+                            onCreateNote = onCreateNote
+                        )
                     }
                     is MessageSegment.Header -> {
                         val (fontSize, fontWeight, topPadding) = when (segment.level) {
@@ -169,22 +177,21 @@ fun FormattedText(
                         }
 
                         is MessageSegment.Code -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Black)
-                                    .horizontalScroll(rememberScrollState())
-                                    .padding(12.dp)
-                            ) {
-                                Text(
-                                    text = segment.content.trim(),
-                                    color = textColor,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 12.sp,
-                                    softWrap = false
-                                )
-                            }
+                            CodeBlockWithHeader(
+                                code = segment.content.trim(),
+                                language = segment.language,
+                                textColor = textColor,
+                                onCreateNote = null
+                            )
+                        }
+
+                        is MessageSegment.Think -> {
+                            ThinkBlockWithHeader(
+                                content = segment.content.trim(),
+                                durationSeconds = segment.durationSeconds,
+                                textColor = textColor,
+                                onCreateNote = null
+                            )
                         }
 
                         is MessageSegment.Header -> {
@@ -280,6 +287,204 @@ fun FormattedText(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CodeBlockWithHeader(
+    code: String,
+    language: String?,
+    textColor: Color,
+    onCreateNote: ((String) -> Unit)?
+) {
+    val context = LocalContext.current
+    val colorScheme = MaterialTheme.colorScheme
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Black)
+    ) {
+        // Header with language name and copy button
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Black.copy(alpha = 0.8f))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Language name
+            Text(
+                text = language?.uppercase() ?: "CODE",
+                color = textColor.copy(alpha = 0.7f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                fontFamily = FontFamily.Monospace
+            )
+
+            // Copy button
+            IconButton(
+                onClick = {
+                    val clip = ClipData.newPlainText("code", code)
+                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(
+                        clip
+                    )
+                    Toast
+                        .makeText(context, "Код скопирован", Toast.LENGTH_SHORT)
+                        .show()
+                },
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_copy),
+                    contentDescription = "Копировать код",
+                    modifier = Modifier.size(16.dp),
+                    tint = textColor.copy(alpha = 0.7f)
+                )
+            }
+        }
+
+        // Horizontal divider line
+        HorizontalDivider(
+            modifier = Modifier.fillMaxWidth(),
+            thickness = 1.dp,
+            color = Color.Gray.copy(alpha = 0.3f)
+        )
+
+        // Code content
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(12.dp)
+        ) {
+            if (onCreateNote != null) {
+                NoteSelectionContainer(
+                    text = code,
+                    onCreateNote = onCreateNote,
+                    textColor = textColor,
+                    backgroundColor = Color.Transparent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Normal,
+                    fontStyle = FontStyle.Normal,
+                    isCode = true
+                )
+            } else {
+                SelectionContainer {
+                    Text(
+                        text = code,
+                        color = textColor,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        softWrap = false
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThinkBlockWithHeader(
+    content: String,
+    durationSeconds: Float,
+    textColor: Color,
+    onCreateNote: ((String) -> Unit)?
+) {
+    val context = LocalContext.current
+    val colorScheme = MaterialTheme.colorScheme
+
+    // Цвет для think блока (слегка отличается от code блока)
+    val thinkBackgroundColor = Color(0xFF1A1A2E) // Темно-синеватый оттенок
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(thinkBackgroundColor)
+    ) {
+        // Header with "Thought for X seconds" and copy button
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(thinkBackgroundColor.copy(alpha = 0.8f))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // "Thought for X seconds" text
+            Text(
+                text = if (durationSeconds > 0) {
+                    String.format("Thought for %.1f seconds", durationSeconds)
+                } else {
+                    "Thought"
+                },
+                color = textColor.copy(alpha = 0.7f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                fontFamily = FontFamily.Monospace
+            )
+
+            // Copy button
+            IconButton(
+                onClick = {
+                    val clip = ClipData.newPlainText("thought", content)
+                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(
+                        clip
+                    )
+                    Toast
+                        .makeText(context, "Мысли скопированы", Toast.LENGTH_SHORT)
+                        .show()
+                },
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_copy),
+                    contentDescription = "Копировать мысли",
+                    modifier = Modifier.size(16.dp),
+                    tint = textColor.copy(alpha = 0.7f)
+                )
+            }
+        }
+
+        // Horizontal divider line
+        HorizontalDivider(
+            modifier = Modifier.fillMaxWidth(),
+            thickness = 1.dp,
+            color = Color.Gray.copy(alpha = 0.3f)
+        )
+
+        // Think content
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            if (onCreateNote != null) {
+                NoteSelectionContainer(
+                    text = content,
+                    onCreateNote = onCreateNote,
+                    textColor = textColor.copy(alpha = 0.9f),
+                    backgroundColor = Color.Transparent,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Normal,
+                    fontStyle = FontStyle.Italic,
+                    isCode = false
+                )
+            } else {
+                SelectionContainer {
+                    Text(
+                        text = content,
+                        color = textColor.copy(alpha = 0.9f),
+                        fontSize = 13.sp,
+                        fontStyle = FontStyle.Italic,
+                        lineHeight = 20.sp
+                    )
                 }
             }
         }

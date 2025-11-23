@@ -30,7 +30,7 @@
       </SelectionState>
       <SelectionState runConfigName="AI_Chat_&amp;_notes.app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2025-08-23T15:34:58.031549100Z">
+        <DropdownSelection timestamp="2025-11-19T20:44:24.535916400Z">
           <Target type="DEFAULT_BOOT">
             <handle>
               <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\misha\.android\avd\Pixel_9_Pro_XL.avd" />

@@ -602,7 +602,7 @@ fun ChatScreen(
                                 }
                             }
                         },
-                        readOnly = isWriting || selectedModel.isEmpty(),
+                        readOnly = selectedModel.isEmpty(),
                         singleLine = false,
                         maxLines = 10,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),

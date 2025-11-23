@@ -297,6 +297,7 @@ fun hello() {
         when (segment) {
             is MessageSegment.Header -> result.append(" (level=${segment.level}, content='${segment.content}')")
             is MessageSegment.Text -> result.append(" (content='${segment.content.take(50)}...')")
+            is MessageSegment.Think -> result.append(" (duration=${segment.durationSeconds}s, content='${segment.content.take(50)}...')")
             is MessageSegment.Code -> result.append(
                 " (lang=${segment.language}, content='${
                     segment.content.take(
@@ -349,6 +350,7 @@ fun simpleMarkdownTest(): String {
             is MessageSegment.OrderedListItem -> "OrderedListItem(${segment.number})"
             is MessageSegment.HorizontalRule -> "HorizontalRule"
             is MessageSegment.Code -> "Code(${segment.language ?: "no-lang"})"
+            is MessageSegment.Think -> "Think(${segment.durationSeconds}s)"
             null -> "null"
         }
         val status = if (actual.contains(expected.split("(")[0])) "✅" else "❌"
