@@ -4,7 +4,13 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,9 +30,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -70,6 +81,7 @@ fun FormattedText(
                             isCode = false
                         )
                     }
+
                     is MessageSegment.Code -> {
                         CodeBlockWithHeader(
                             code = segment.content.trim(),
@@ -78,6 +90,7 @@ fun FormattedText(
                             onCreateNote = onCreateNote
                         )
                     }
+
                     is MessageSegment.Think -> {
                         ThinkBlockWithHeader(
                             content = segment.content.trim(),
@@ -86,6 +99,7 @@ fun FormattedText(
                             onCreateNote = onCreateNote
                         )
                     }
+
                     is MessageSegment.Header -> {
                         val (fontSize, fontWeight, topPadding) = when (segment.level) {
                             1 -> Triple(30.sp, FontWeight.Bold, 16.dp)
@@ -390,7 +404,7 @@ private fun CodeBlockWithHeader(
 }
 
 @Composable
-private fun ThinkBlockWithHeader(
+fun ThinkBlockWithHeader(
     content: String,
     durationSeconds: Float,
     textColor: Color,
@@ -402,17 +416,28 @@ private fun ThinkBlockWithHeader(
     // Цвет для think блока (слегка отличается от code блока)
     val thinkBackgroundColor = Color(0xFF1A1A2E) // Темно-синеватый оттенок
 
+    // Состояние для сворачивания/разворачивания блока
+    var isExpanded by remember { mutableStateOf(false) }
+
+    // Анимация поворота стрелки
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "think_arrow_rotation"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(thinkBackgroundColor)
     ) {
-        // Header with "Thought for X seconds" and copy button
+        // Header with "Thought for X seconds" and expand/collapse button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(thinkBackgroundColor.copy(alpha = 0.8f))
+                .clickable { isExpanded = !isExpanded }
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -430,61 +455,63 @@ private fun ThinkBlockWithHeader(
                 fontFamily = FontFamily.Monospace
             )
 
-            // Copy button
-            IconButton(
-                onClick = {
-                    val clip = ClipData.newPlainText("thought", content)
-                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(
-                        clip
-                    )
-                    Toast
-                        .makeText(context, "Мысли скопированы", Toast.LENGTH_SHORT)
-                        .show()
-                },
-                modifier = Modifier.size(24.dp)
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_copy),
-                    contentDescription = "Копировать мысли",
-                    modifier = Modifier.size(16.dp),
-                    tint = textColor.copy(alpha = 0.7f)
-                )
-            }
+            // Expand/collapse button
+            Icon(
+                painter = painterResource(id = R.drawable.ic_more),
+                contentDescription = if (isExpanded) "Свернуть" else "Развернуть",
+                modifier = Modifier
+                    .size(16.dp)
+                    .rotate(arrowRotation),
+                tint = textColor.copy(alpha = 0.7f)
+            )
         }
 
-        // Horizontal divider line
-        HorizontalDivider(
-            modifier = Modifier.fillMaxWidth(),
-            thickness = 1.dp,
-            color = Color.Gray.copy(alpha = 0.3f)
-        )
-
-        // Think content
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
+        // Анимированное содержимое блока
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(
+                animationSpec = tween(durationMillis = 300)
+            ),
+            exit = shrinkVertically(
+                animationSpec = tween(durationMillis = 300)
+            )
         ) {
-            if (onCreateNote != null) {
-                NoteSelectionContainer(
-                    text = content,
-                    onCreateNote = onCreateNote,
-                    textColor = textColor.copy(alpha = 0.9f),
-                    backgroundColor = Color.Transparent,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Normal,
-                    fontStyle = FontStyle.Italic,
-                    isCode = false
+            Column {
+                // Horizontal divider line
+                HorizontalDivider(
+                    modifier = Modifier.fillMaxWidth(),
+                    thickness = 1.dp,
+                    color = Color.Gray.copy(alpha = 0.3f)
                 )
-            } else {
-                SelectionContainer {
-                    Text(
-                        text = content,
-                        color = textColor.copy(alpha = 0.9f),
-                        fontSize = 13.sp,
-                        fontStyle = FontStyle.Italic,
-                        lineHeight = 20.sp
-                    )
+
+                // Think content
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp)
+                ) {
+                    if (onCreateNote != null) {
+                        NoteSelectionContainer(
+                            text = content,
+                            onCreateNote = onCreateNote,
+                            textColor = textColor.copy(alpha = 0.9f),
+                            backgroundColor = Color.Transparent,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Normal,
+                            fontStyle = FontStyle.Italic,
+                            isCode = false
+                        )
+                    } else {
+                        SelectionContainer {
+                            Text(
+                                text = content,
+                                color = textColor.copy(alpha = 0.9f),
+                                fontSize = 13.sp,
+                                fontStyle = FontStyle.Italic,
+                                lineHeight = 20.sp
+                            )
+                        }
+                    }
                 }
             }
         }

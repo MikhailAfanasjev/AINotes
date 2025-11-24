@@ -11,5 +11,7 @@ open class ChatMessageEntity(
     var role: String = "", // "user" или "assistant"
     var contentRaw: String = "",
     var timestamp: Long = System.currentTimeMillis(),
-    var isComplete: Boolean = true
+    var isComplete: Boolean = true,
+    var reasoningContent: String = "", // Содержимое блока размышлений (reasoning_content)
+    var reasoningDurationSeconds: Float = 0f // Время генерации размышлений в секундах
 ) : RealmObject()

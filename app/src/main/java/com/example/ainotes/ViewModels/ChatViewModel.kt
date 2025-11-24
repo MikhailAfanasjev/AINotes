@@ -125,7 +125,9 @@ class ChatViewModel @Inject constructor(
                     Message(
                         role = entity.role,
                         content = entity.contentRaw,
-                        isComplete = entity.isComplete
+                        isComplete = entity.isComplete,
+                        reasoningContent = entity.reasoningContent.takeIf { it.isNotBlank() },
+                        reasoningDurationSeconds = if (entity.reasoningDurationSeconds > 0f) entity.reasoningDurationSeconds else null
                     )
                 }
             _chatMessages.value = persisted
@@ -196,7 +198,9 @@ class ChatViewModel @Inject constructor(
                     Message(
                         role = entity.role,
                         content = entity.contentRaw,
-                        isComplete = entity.isComplete
+                        isComplete = entity.isComplete,
+                        reasoningContent = entity.reasoningContent.takeIf { it.isNotBlank() },
+                        reasoningDurationSeconds = if (entity.reasoningDurationSeconds > 0f) entity.reasoningDurationSeconds else null
                     )
                 }
             Log.d(TAG, "📥 Загружено сообщений из БД для чата $chatId: ${persisted.size}")
@@ -290,7 +294,9 @@ class ChatViewModel @Inject constructor(
         isComplete: Boolean = false,
         tokenCount: Int = 0,
         tokensPerSecond: Float = 0f,
-        generationTimeMs: Long = 0L
+        generationTimeMs: Long = 0L,
+        reasoningContent: String? = null,
+        reasoningDurationSeconds: Float? = null
     ) {
         val messages = _chatMessages.value.toMutableList()
         val idx = messages.indexOfLast { it.role == "assistant" }
@@ -300,7 +306,9 @@ class ChatViewModel @Inject constructor(
                 isComplete = isComplete,
                 tokenCount = tokenCount,
                 tokensPerSecond = tokensPerSecond,
-                generationTimeMs = generationTimeMs
+                generationTimeMs = generationTimeMs,
+                reasoningContent = reasoningContent,
+                reasoningDurationSeconds = reasoningDurationSeconds
             )
             _chatMessages.value = messages
         }
@@ -541,11 +549,18 @@ class ChatViewModel @Inject constructor(
         builder: StringBuilder,
         chatId: String
     ) {
-        // Переменные для отслеживания метрик токенов
+        // Переменные для отслеживания метрик токенов (только для content, БЕЗ reasoning)
         val startTime = System.currentTimeMillis()
         var tokenCount = 0
+        var contentStartTime: Long? = null // Время начала генерации content (без reasoning)
         var lastUpdateTime = startTime
         var currentTokensPerSecond = 0f
+
+        // Переменные для отслеживания reasoning content
+        val reasoningBuilder = StringBuilder()
+        var reasoningStartTime: Long? = null
+        var reasoningEndTime: Long? = null
+        var isReasoningPhase = false
 
         // Читаем строку за строкой из source
         while (!source.exhausted()) {
@@ -554,46 +569,108 @@ class ChatViewModel @Inject constructor(
 
             if (line.startsWith("data:")) {
                 val jsonLine = line.removePrefix("data:").trim()
-                val chunk = runCatching {
+
+                // Парсим delta объект
+                val deltaObject = runCatching {
                     gson.fromJson(jsonLine, JsonObject::class.java)
                         .getAsJsonArray("choices")[0]
                         .asJsonObject["delta"].asJsonObject
-                        .get("content")?.asString.orEmpty()
-                }.getOrNull().orEmpty()
+                }.getOrNull()
 
-                if (chunk.isNotEmpty()) {
-                    builder.append(chunk)
-                    tokenCount++
-
-                    // Рассчитываем текущую скорость генерации
-                    val currentTime = System.currentTimeMillis()
-                    val elapsedSeconds = (currentTime - startTime) / 1000f
-                    if (elapsedSeconds > 0) {
-                        currentTokensPerSecond = tokenCount / elapsedSeconds
+                if (deltaObject != null) {
+                    // Проверяем наличие reasoning_content
+                    val reasoningChunk = deltaObject.get("reasoning_content")?.asString.orEmpty()
+                    if (reasoningChunk.isNotEmpty()) {
+                        if (!isReasoningPhase) {
+                            isReasoningPhase = true
+                            reasoningStartTime = System.currentTimeMillis()
+                            Log.d(TAG, "🧠 Начало фазы размышления (reasoning)")
+                        }
+                        reasoningBuilder.append(reasoningChunk)
+                        // НЕ увеличиваем tokenCount для reasoning!
                     }
 
-                    // убираем cleanResponse - передаем исходный markdown
-                    withContext(Dispatchers.Main) {
-                        // обновляем сообщение ассистента по мере поступления текста
-                        updateLastAssistantMessage(
-                            content = builder.toString(),
-                            isComplete = false,
-                            tokenCount = tokenCount,
-                            tokensPerSecond = currentTokensPerSecond,
-                            generationTimeMs = currentTime - startTime
-                        )
-                    }
+                    // Проверяем наличие обычного content
+                    val contentChunk = deltaObject.get("content")?.asString.orEmpty()
+                    if (contentChunk.isNotEmpty()) {
+                        // Если была фаза размышления и она закончилась
+                        if (isReasoningPhase && reasoningEndTime == null) {
+                            reasoningEndTime = System.currentTimeMillis()
+                            val reasoningDuration =
+                                (reasoningEndTime!! - reasoningStartTime!!) / 1000f
+                            Log.d(
+                                TAG,
+                                "✅ Завершена фаза размышления: ${
+                                    String.format(
+                                        "%.2f",
+                                        reasoningDuration
+                                    )
+                                }с"
+                            )
+                        }
 
-                    lastUpdateTime = currentTime
+                        // Засекаем время начала генерации content (БЕЗ учета reasoning)
+                        if (contentStartTime == null) {
+                            contentStartTime = System.currentTimeMillis()
+                            Log.d(TAG, "📝 Начало генерации контента (без учета reasoning)")
+                        }
+
+                        builder.append(contentChunk)
+                        tokenCount++ // Увеличиваем счетчик ТОЛЬКО для content
+
+                        // Рассчитываем скорость генерации ТОЛЬКО для content
+                        val currentTime = System.currentTimeMillis()
+                        val contentElapsedSeconds = (currentTime - contentStartTime!!) / 1000f
+                        if (contentElapsedSeconds > 0) {
+                            currentTokensPerSecond = tokenCount / contentElapsedSeconds
+                        }
+
+                        // Обновляем сообщение ассистента по мере поступления текста
+                        withContext(Dispatchers.Main) {
+                            val reasoningDurationSeconds =
+                                if (reasoningEndTime != null && reasoningStartTime != null) {
+                                    (reasoningEndTime!! - reasoningStartTime!!) / 1000f
+                                } else null
+
+                            updateLastAssistantMessage(
+                                content = builder.toString(),
+                                isComplete = false,
+                                tokenCount = tokenCount,
+                                tokensPerSecond = currentTokensPerSecond,
+                                generationTimeMs = currentTime - contentStartTime!!,
+                                reasoningContent = reasoningBuilder.toString()
+                                    .takeIf { it.isNotBlank() },
+                                reasoningDurationSeconds = reasoningDurationSeconds
+                            )
+                        }
+
+                        lastUpdateTime = currentTime
+                    }
                 }
             }
         }
 
+        // Если размышление не завершилось естественным образом (не было content после него)
+        if (isReasoningPhase && reasoningEndTime == null) {
+            reasoningEndTime = System.currentTimeMillis()
+        }
+
+        // Если не было content вообще, устанавливаем contentStartTime = startTime
+        if (contentStartTime == null) {
+            contentStartTime = startTime
+        }
+
         // Финальное завершение с итоговыми метриками
         val finalRaw = builder.toString()
-        val totalTime = System.currentTimeMillis() - startTime
-        val finalTokensPerSecond = if (totalTime > 0) {
-            (tokenCount * 1000f) / totalTime
+        val finalReasoningContent = reasoningBuilder.toString().takeIf { it.isNotBlank() }
+        val finalReasoningDuration = if (reasoningEndTime != null && reasoningStartTime != null) {
+            (reasoningEndTime!! - reasoningStartTime!!) / 1000f
+        } else null
+
+        // Вычисляем метрики ТОЛЬКО для content (без reasoning)
+        val contentGenerationTime = System.currentTimeMillis() - contentStartTime
+        val finalTokensPerSecond = if (contentGenerationTime > 0) {
+            (tokenCount * 1000f) / contentGenerationTime
         } else {
             0f
         }
@@ -604,7 +681,9 @@ class ChatViewModel @Inject constructor(
                 isComplete = true,
                 tokenCount = tokenCount,
                 tokensPerSecond = finalTokensPerSecond,
-                generationTimeMs = totalTime
+                generationTimeMs = contentGenerationTime,
+                reasoningContent = finalReasoningContent,
+                reasoningDurationSeconds = finalReasoningDuration
             )
         }
 
@@ -615,7 +694,9 @@ class ChatViewModel @Inject constructor(
                 role = "assistant",
                 contentRaw = finalRaw,
                 timestamp = System.currentTimeMillis(),
-                isComplete = true
+                isComplete = true,
+                reasoningContent = finalReasoningContent ?: "",
+                reasoningDurationSeconds = finalReasoningDuration ?: 0f
             )
         )
 
@@ -625,12 +706,22 @@ class ChatViewModel @Inject constructor(
         // Логируем итоговые метрики
         Log.d(
             TAG,
-            "📊 Метрики генерации: $tokenCount токенов за ${totalTime}мс (${
+            "📊 Метрики генерации контента (БЕЗ reasoning): $tokenCount токенов за ${contentGenerationTime}мс (${
                 String.format(
                     "%.2f",
                     finalTokensPerSecond
                 )
-            } т/с)")
+            } т/с)"
+        )
+
+        if (finalReasoningContent != null) {
+            Log.d(
+                TAG,
+                "🧠 Размышление: ${finalReasoningContent.length} символов за ${
+                    String.format("%.2f", finalReasoningDuration ?: 0f)
+                }с"
+            )
+        }
     }
 
     fun clearChat() {

@@ -89,6 +89,21 @@ fun ChatMessageItem(
             ) {
                 if (showTyping) TypingIndicator(bubbleColor = bubbleColor, contentColor = colorScheme.onSecondary)
 
+                // Отображаем reasoning content если есть
+                if (!message.reasoningContent.isNullOrBlank()) {
+                    ThinkBlockWithHeader(
+                        content = message.reasoningContent,
+                        durationSeconds = message.reasoningDurationSeconds ?: 0f,
+                        textColor = colorScheme.onSecondary,
+                        onCreateNote = onCreateNote
+                    )
+
+                    // Добавляем небольшой отступ между reasoning и основным контентом
+                    if (message.content.isNotBlank()) {
+                        Spacer(modifier = Modifier.padding(vertical = 4.dp))
+                    }
+                }
+
                 if (message.content.isNotBlank()) {
                     FormattedText(
                         text = message.content,

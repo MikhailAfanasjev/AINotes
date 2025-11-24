@@ -13,7 +13,9 @@ data class Message(
     val stop: List<String>? = null,
     val tokenCount: Int = 0,
     val tokensPerSecond: Float = 0f,
-    val generationTimeMs: Long = 0L
+    val generationTimeMs: Long = 0L,
+    val reasoningContent: String? = null,
+    val reasoningDurationSeconds: Float? = null
 )
 
 data class ChatGPTResponse(
