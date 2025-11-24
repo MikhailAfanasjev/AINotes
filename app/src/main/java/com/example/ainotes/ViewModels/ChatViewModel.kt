@@ -673,6 +673,81 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
+     * Удаляет конкретное сообщение из чата и базы данных по содержимому и роли
+     * Если удаляется сообщение пользователя, также удаляется следующий ответ ассистента
+     */
+    fun deleteMessage(messageContent: String, role: String) {
+        val currentChatId = _currentChatId.value ?: return
+        val messages = _chatMessages.value.toMutableList()
+
+        // Находим индекс сообщения, которое нужно удалить
+        val messageIndex = messages.indexOfFirst {
+            it.content == messageContent && it.role == role
+        }
+
+        if (messageIndex != -1) {
+            // Если это сообщение пользователя, проверяем, есть ли следующее сообщение от ассистента
+            val shouldDeleteAssistantResponse = role == "user" &&
+                    messageIndex + 1 < messages.size &&
+                    messages[messageIndex + 1].role == "assistant"
+
+            val assistantMessageContent = if (shouldDeleteAssistantResponse) {
+                messages[messageIndex + 1].content
+            } else null
+
+            // Удаляем сообщение пользователя
+            messages.removeAt(messageIndex)
+
+            // Удаляем следующий ответ ассистента, если он есть
+            if (shouldDeleteAssistantResponse && messageIndex < messages.size) {
+                messages.removeAt(messageIndex)
+                Log.d(
+                    TAG,
+                    "🗑️ Также удаляем ответ ассистента: '${assistantMessageContent?.take(50)}...'"
+                )
+            }
+
+            _chatMessages.value = messages
+
+            // Удаляем из базы данных
+            viewModelScope.launch {
+                val allMessages = chatRepo.getMessagesByChatId(currentChatId)
+                val messageToDelete = allMessages.find {
+                    it.contentRaw == messageContent && it.role == role
+                }
+
+                messageToDelete?.let { message ->
+                    chatRepo.deleteMessage(message)
+                    Log.d(
+                        TAG,
+                        "🗑️ Удалено сообщение: role=$role, content='${messageContent.take(50)}...'"
+                    )
+
+                    // Если это сообщение пользователя, ищем и удаляем следующий ответ ассистента
+                    if (role == "user" && assistantMessageContent != null) {
+                        // Находим следующее сообщение ассистента с timestamp больше текущего
+                        val assistantResponse = allMessages
+                            .filter { it.role == "assistant" && it.timestamp > message.timestamp }
+                            .minByOrNull { it.timestamp }
+
+                        assistantResponse?.let { assistantMsg ->
+                            chatRepo.deleteMessage(assistantMsg)
+                            Log.d(
+                                TAG,
+                                "🗑️ Удален ответ ассистента из БД: '${
+                                    assistantMsg.contentRaw.take(50)
+                                }...'"
+                            )
+                        }
+                    }
+                }
+
+                chatEntityRepo.updateChatLastMessage(currentChatId)
+            }
+        }
+    }
+
+    /**
      * Инициализация модели при запуске приложения
      */
     private fun initializeModel() {

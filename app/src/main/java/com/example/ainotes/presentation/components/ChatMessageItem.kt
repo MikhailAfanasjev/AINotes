@@ -46,9 +46,11 @@ fun ChatMessageItem(
     message: Message,
     onCreateNote: (String) -> Unit,
     onRetry: () -> Unit,
+    onEditMessage: ((String) -> Unit)? = null,
     showTyping: Boolean = false,
 ) {
     val isAssistant = message.role == "assistant"
+    val isUser = message.role == "user"
     val bubbleShape = if (isAssistant) {
         RoundedCornerShape(0.dp, 16.dp, 16.dp, 16.dp)
     } else {
@@ -94,6 +96,31 @@ fun ChatMessageItem(
                         modifier = Modifier.fillMaxWidth(),
                         onCreateNote = onCreateNote
                     )
+                }
+
+                // Кнопка редактирования для сообщений пользователя
+                if (isUser && message.content.isNotBlank() && onEditMessage != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                onEditMessage(message.content)
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_edit_message),
+                                contentDescription = "Редактировать сообщение",
+                                modifier = Modifier.size(16.dp),
+                                tint = colorScheme.onSecondary
+                            )
+                        }
+                    }
                 }
 
                 if (isAssistant && message.isComplete && message.content.isNotBlank()) {
