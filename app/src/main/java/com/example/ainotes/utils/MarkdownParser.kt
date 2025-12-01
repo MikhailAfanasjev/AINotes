@@ -1,11 +1,14 @@
 package com.example.ainotes.utils
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
 object MarkdownParser {
 
     /**
      * Разбирает входную строку с Markdown-разметкой на список сегментов
      */
-    fun parseSegments(input: String): List<MessageSegment> {
+    suspend fun parseSegments(input: String): List<MessageSegment> = withContext(Dispatchers.Default) {
         // Сначала обрабатываем <think> блоки, так как они могут быть многострочными
         val processedInput = processThinkBlocks(input)
 
@@ -46,8 +49,18 @@ object MarkdownParser {
                 continue
             }
 
+            // Проверяем на таблицу
+            if (isTableRow(trimmedLine)) {
+                val tableData = parseTable(lines, i)
+                if (tableData.rows.isNotEmpty()) {
+                    segments.add(MessageSegment.Table(tableData.headers, tableData.rows, tableData.alignments))
+                    i = tableData.endIndex
+                    continue
+                }
+            }
+
             // Горизонтальная линия
-            if (trimmedLine.matches(Regex("^-{3,}\\s*$"))) {
+            if (trimmedLine.matches(Regex("^[-*_]{3,}\\s*$"))) {
                 segments.add(MessageSegment.HorizontalRule)
                 i++
                 continue
@@ -65,28 +78,74 @@ object MarkdownParser {
 
             // Цитаты > текст
             if (trimmedLine.startsWith("> ")) {
-                val content = trimmedLine.substring(2)
-                segments.add(MessageSegment.Quote(content))
-                i++
-                continue
+                val quoteLines = mutableListOf<String>()
+                var j = i
+
+                while (j < lines.size && lines[j].trim().let {
+                        it.startsWith("> ") || it == ">"
+                    }) {
+                    quoteLines.add(lines[j].trim().removePrefix(">").trim())
+                    j++
+                }
+
+                if (quoteLines.isNotEmpty()) {
+                    segments.add(MessageSegment.Quote(quoteLines.joinToString("\n")))
+                    i = j
+                    continue
+                }
             }
 
             // Нумерованные списки 1. 2. 3.
             val orderedListMatch = Regex("^(\\d+)\\.\\s+(.+)$").find(trimmedLine)
             if (orderedListMatch != null) {
-                val number = orderedListMatch.groupValues[1].toInt()
-                val content = orderedListMatch.groupValues[2]
-                segments.add(MessageSegment.OrderedListItem(number, content))
-                i++
+                val listItems = mutableListOf<Pair<Int, String>>()
+                var j = i
+                var expectedNumber = 1
+
+                while (j < lines.size) {
+                    val currentLine = lines[j].trim()
+                    val match = Regex("^(\\d+)\\.\\s+(.+)$").find(currentLine)
+
+                    if (match != null) {
+                        val number = match.groupValues[1].toInt()
+                        val content = match.groupValues[2]
+                        listItems.add(number to content)
+                        expectedNumber = number + 1
+                        j++
+                    } else {
+                        break
+                    }
+                }
+
+                listItems.forEach { (number, content) ->
+                    segments.add(MessageSegment.OrderedListItem(number, content))
+                }
+                i = j
                 continue
             }
 
             // Маркированные списки - или *
-            val unorderedListMatch = Regex("^[-*]\\s+(.+)$").find(trimmedLine)
+            val unorderedListMatch = Regex("^[-*+]\\s+(.+)$").find(trimmedLine)
             if (unorderedListMatch != null) {
-                val content = unorderedListMatch.groupValues[1]
-                segments.add(MessageSegment.UnorderedListItem(content))
-                i++
+                val listItems = mutableListOf<String>()
+                var j = i
+
+                while (j < lines.size) {
+                    val currentLine = lines[j].trim()
+                    val match = Regex("^[-*+]\\s+(.+)$").find(currentLine)
+
+                    if (match != null) {
+                        listItems.add(match.groupValues[1])
+                        j++
+                    } else {
+                        break
+                    }
+                }
+
+                listItems.forEach { content ->
+                    segments.add(MessageSegment.UnorderedListItem(content))
+                }
+                i = j
                 continue
             }
 
@@ -94,24 +153,28 @@ object MarkdownParser {
             if (trimmedLine.isNotEmpty() || line.isEmpty()) {
                 // Собираем последовательные строки обычного текста
                 val textLines = mutableListOf<String>()
-                while (i < lines.size) {
-                    val currentLine = lines[i]
+                var j = i
+
+                while (j < lines.size) {
+                    val currentLine = lines[j]
                     val currentTrimmed = currentLine.trim()
 
                     // Проверяем, не является ли строка специальным элементом
                     if (currentTrimmed.startsWith("```") ||
                         currentTrimmed.startsWith("<<<THINK_BLOCK>>>") ||
-                        currentTrimmed.matches(Regex("^-{3,}\\s*$")) ||
+                        currentTrimmed.matches(Regex("^[-*_]{3,}\\s*$")) ||
                         Regex("^#{1,6}\\s+").find(currentTrimmed) != null ||
                         currentTrimmed.startsWith("> ") ||
+                        currentTrimmed == ">" ||
                         Regex("^\\d+\\.\\s+").find(currentTrimmed) != null ||
-                        Regex("^[-*]\\s+").find(currentTrimmed) != null
+                        Regex("^[-*+]\\s+").find(currentTrimmed) != null ||
+                        isTableRow(currentTrimmed)
                     ) {
                         break
                     }
 
                     textLines.add(currentLine)
-                    i++
+                    j++
                 }
 
                 if (textLines.isNotEmpty()) {
@@ -120,13 +183,89 @@ object MarkdownParser {
                         segments.add(MessageSegment.Text(textContent))
                     }
                 }
+                i = if (j > i) j else i + 1
                 continue
             }
 
             i++
         }
 
-        return segments
+        return@withContext segments
+    }
+
+    /**
+     * Проверяет, является ли строка строкой таблицы
+     */
+    private fun isTableRow(line: String): Boolean {
+        return line.contains('|') &&
+                !line.trim().startsWith("```") &&
+                line.trim().isNotEmpty()
+    }
+
+    /**
+     * Парсит таблицу из Markdown
+     */
+    private fun parseTable(lines: List<String>, startIndex: Int): TableParseResult {
+        val tableLines = mutableListOf<String>()
+        var i = startIndex
+
+        // Собираем все строки таблицы
+        while (i < lines.size && isTableRow(lines[i].trim())) {
+            tableLines.add(lines[i].trim())
+            i++
+        }
+
+        if (tableLines.size < 2) {
+            return TableParseResult(emptyList(), emptyList(), emptyList(), startIndex)
+        }
+
+        // Парсим заголовки
+        val headerRow = tableLines[0]
+        val headers = parseTableRow(headerRow)
+
+        // Парсим выравнивание
+        val alignmentRow = tableLines[1]
+        val alignments = parseTableAlignment(alignmentRow, headers.size)
+
+        // Парсим данные
+        val dataRows = mutableListOf<List<String>>()
+        for (j in 2 until tableLines.size) {
+            val rowData = parseTableRow(tableLines[j])
+            if (rowData.size == headers.size) {
+                dataRows.add(rowData)
+            }
+        }
+
+        return TableParseResult(headers, dataRows, alignments, i)
+    }
+
+    /**
+     * Парсит строку таблицы
+     */
+    private fun parseTableRow(row: String): List<String> {
+        return row.split('|')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+    }
+
+    /**
+     * Парсит строку выравнивания таблицы
+     */
+    private fun parseTableAlignment(alignmentRow: String, expectedColumns: Int): List<MessageSegment.TableAlignment> {
+        val alignmentCells = parseTableRow(alignmentRow)
+        val alignments = mutableListOf<MessageSegment.TableAlignment>()
+
+        for (i in 0 until expectedColumns) {
+            val cell = if (i < alignmentCells.size) alignmentCells[i] else ""
+            val alignment = when {
+                cell.startsWith(":") && cell.endsWith(":") -> MessageSegment.TableAlignment.CENTER
+                cell.endsWith(":") -> MessageSegment.TableAlignment.RIGHT
+                else -> MessageSegment.TableAlignment.LEFT
+            }
+            alignments.add(alignment)
+        }
+
+        return alignments
     }
 
     /**
@@ -135,6 +274,16 @@ object MarkdownParser {
     private data class ProcessedInput(
         val lines: List<String>,
         val thinkBlocks: List<MessageSegment.Think>
+    )
+
+    /**
+     * Результат парсинга таблицы
+     */
+    private data class TableParseResult(
+        val headers: List<String>,
+        val rows: List<List<String>>,
+        val alignments: List<MessageSegment.TableAlignment>,
+        val endIndex: Int
     )
 
     /**
@@ -159,29 +308,22 @@ object MarkdownParser {
         }
 
         // 2. Обрабатываем текстовый формат "Thought for X seconds"
-        // Паттерн: "Thought for X seconds" за которым следует содержимое до двойной пустой строки
         val thoughtPattern = Regex(
             "Thought for ([\\d.]+) seconds?\\s*\\n\\s*\\n([\\s\\S]*?)(?=\\n\\s*\\n|$)",
             RegexOption.IGNORE_CASE
         )
 
-        // Собираем все совпадения
         val matches = thoughtPattern.findAll(processedText).toList()
-
-        // Создаем временный список для блоков с правильными индексами
         val tempBlocks = mutableListOf<Pair<Int, MessageSegment.Think>>()
 
-        // Обрабатываем с конца, чтобы не нарушить позиции при замене
         matches.reversed().forEach { match ->
             val durationStr = match.groupValues[1]
             val duration = durationStr.toFloatOrNull() ?: 0f
             val thinkContent = match.groupValues[2].trim()
 
-            // Сохраняем индекс и блок
             val currentIndex = blockIndex
             tempBlocks.add(0, currentIndex to MessageSegment.Think(thinkContent, duration))
 
-            // Заменяем на плейсхолдер
             val startPos = match.range.first
             val endPos = match.range.last + 1
 
@@ -192,7 +334,6 @@ object MarkdownParser {
             blockIndex++
         }
 
-        // Добавляем блоки в правильном порядке
         tempBlocks.forEach { (_, block) ->
             thinkBlocks.add(block)
         }

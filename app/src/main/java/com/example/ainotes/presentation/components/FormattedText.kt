@@ -9,18 +9,28 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -28,8 +38,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,20 +52,30 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.times
 import com.example.ainotes.utils.MessageSegment
 import com.example.ainotes.utils.parseMarkdownText
 import com.example.ainotes.presentation.ui.theme.Black
 import com.example.linguareader.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun FormattedText(
@@ -62,10 +84,15 @@ fun FormattedText(
     modifier: Modifier = Modifier,
     onCreateNote: ((String) -> Unit)? = null
 ) {
-    val segments = parseMarkdownText(text)
+    var segments by remember { mutableStateOf<List<MessageSegment>>(emptyList()) }
+
+    LaunchedEffect(text) {
+        segments = withContext(Dispatchers.IO) {
+            parseMarkdownText(text)
+        }
+    }
 
     if (onCreateNote != null) {
-        // Если нужна функция создания заметок, используем NoteSelectionContainer для каждого сегмента
         Column(modifier = modifier) {
             segments.forEach { segment ->
                 when (segment) {
@@ -162,8 +189,17 @@ fun FormattedText(
                         )
                     }
 
+                    is MessageSegment.Table -> {
+                        TableView(
+                            headers = segment.headers,
+                            rows = segment.rows,
+                            alignments = segment.alignments,
+                            textColor = textColor,
+                            onCreateNote = onCreateNote
+                        )
+                    }
+
                     is MessageSegment.HorizontalRule -> {
-                        // Горизонтальная линия не нужна в выделении
                         HorizontalDivider(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -176,7 +212,6 @@ fun FormattedText(
             }
         }
     } else {
-        // Простое отображение без функции создания заметок
         SelectionContainer {
             Column(modifier = modifier) {
                 segments.forEach { segment ->
@@ -238,7 +273,6 @@ fun FormattedText(
                                     )
                                     .padding(12.dp)
                             ) {
-                                // Вертикальная линия цитаты
                                 Box(
                                     modifier = Modifier
                                         .background(
@@ -291,6 +325,16 @@ fun FormattedText(
                             }
                         }
 
+                        is MessageSegment.Table -> {
+                            TableView(
+                                headers = segment.headers,
+                                rows = segment.rows,
+                                alignments = segment.alignments,
+                                textColor = textColor,
+                                onCreateNote = null
+                            )
+                        }
+
                         is MessageSegment.HorizontalRule -> {
                             HorizontalDivider(
                                 modifier = Modifier
@@ -308,6 +352,276 @@ fun FormattedText(
 }
 
 @Composable
+private fun TableCell(
+    width: Dp,
+    alignment: MessageSegment.TableAlignment?,
+    dividerColor: Color,
+    content: @Composable BoxScope.() -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .width(width)
+            .height(IntrinsicSize.Min)
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .padding(12.dp),
+            contentAlignment = when (alignment) {
+                MessageSegment.TableAlignment.CENTER -> Alignment.Center
+                MessageSegment.TableAlignment.RIGHT -> Alignment.CenterEnd
+                else -> Alignment.CenterStart
+            },
+            content = content
+        )
+
+        Box(
+            modifier = Modifier
+                .width(1.dp)
+                .fillMaxHeight()
+                .background(dividerColor)
+        )
+    }
+}
+
+@Composable
+private fun HeaderCell(
+    text: String,
+    width: Dp,
+    style: TextStyle,
+    color: Color,
+    padding: Dp
+) {
+    Box(
+        modifier = Modifier
+            .width(width)
+            .padding(horizontal = padding, vertical = 8.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Text(
+            text = text,
+            style = style,
+            color = color.copy(alpha = 0.75f),
+            softWrap = true,
+            maxLines = Int.MAX_VALUE
+        )
+    }
+}
+
+@Composable
+private fun BodyCell(
+    text: String,
+    width: Dp,
+    style: TextStyle,
+    color: Color,
+    padding: Dp
+) {
+    Box(
+        modifier = Modifier
+            .width(width)
+            .padding(horizontal = padding, vertical = 8.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Text(
+            text = text,
+            style = style,
+            color = color,
+            softWrap = true,
+            maxLines = Int.MAX_VALUE,
+            overflow = TextOverflow.Clip,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+private fun VerticalDivider(width: Dp, color: Color) {
+    Box(
+        modifier = Modifier
+            .width(width)
+            .fillMaxHeight()
+            .background(color)
+    )
+}
+
+@Composable
+private fun HorizontalTableDivider(
+    height: Dp,
+    color: Color
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height)
+            .background(color)
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun TableView(
+    headers: List<String>,
+    rows: List<List<String>>,
+    alignments: List<MessageSegment.TableAlignment>,
+    textColor: Color,
+    onCreateNote: ((String) -> Unit)?
+) {
+    val horizontalScroll = rememberScrollState()
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+
+    val minColWidth = 72.dp
+    val maxColWidth = 320.dp
+    val padding = 12.dp
+    val dividerWidth = 1.dp
+
+    val columnsCount = remember(headers, rows) {
+        maxOf(headers.size, rows.maxOfOrNull { it.size } ?: 0)
+    }
+
+    val cellTextStyle = TextStyle(
+        fontSize = 12.sp,
+        fontFamily = FontFamily.Monospace,
+        lineHeight = 18.sp
+    )
+
+    val headerTextStyle = TextStyle(
+        fontSize = 11.sp,
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.Medium
+    )
+
+    /* ---------- COLUMN WIDTHS ---------- */
+
+    val columnWidths = remember(headers, rows) {
+        (0 until columnsCount).map { col ->
+            val texts = buildList {
+                headers.getOrNull(col)?.let { add(it) }
+                rows.forEach { it.getOrNull(col)?.let(::add) }
+            }
+
+            val maxWidthPx = texts.maxOfOrNull { text ->
+                textMeasurer.measure(
+                    text = AnnotatedString(text),
+                    style = cellTextStyle,
+                    constraints = Constraints(maxWidth = Int.MAX_VALUE)
+                ).size.width
+            } ?: with(density) { minColWidth.toPx().toInt() }
+
+            val padded = maxWidthPx +
+                    with(density) { (padding * 2).toPx().toInt() }
+
+            with(density) {
+                padded
+                    .coerceIn(
+                        minColWidth.toPx().toInt(),
+                        maxColWidth.toPx().toInt()
+                    )
+                    .toDp()
+            }
+        }
+    }
+
+    val totalTableWidth = remember(columnWidths, columnsCount) {
+        columnWidths.fold(0.dp) { acc, w -> acc + w } +
+                dividerWidth * (columnsCount - 1)
+    }
+
+    val dividerColor = Color.Gray.copy(alpha = 0.3f)
+
+    /* ---------- TABLE ---------- */
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .clip(RoundedCornerShape(8.dp)),
+        color = Black
+    ) {
+        Box(
+            modifier = Modifier.horizontalScroll(horizontalScroll)
+        ) {
+            Column(
+                modifier = Modifier.width(totalTableWidth)
+            ) {
+
+                /* ----- HEADER ----- */
+
+                Row(
+                    modifier = Modifier
+                        .background(Black.copy(alpha = 0.85f))
+                        .height(IntrinsicSize.Min)
+                ) {
+                    repeat(columnsCount) { col ->
+                        HeaderCell(
+                            text = headers.getOrNull(col).orEmpty(),
+                            width = columnWidths[col],
+                            style = headerTextStyle,
+                            color = textColor,
+                            padding = padding
+                        )
+                        if (col != columnsCount - 1) {
+                            VerticalDivider(dividerWidth, dividerColor)
+                        }
+                    }
+                }
+
+                HorizontalTableDivider(
+                    height = 1.25.dp,
+                    color = dividerColor
+                )
+
+                /* ----- BODY (БЕЗ LazyColumn ❗) ----- */
+
+                Column {
+                    rows.forEachIndexed { rowIndex, row ->
+
+                        Row(
+                            modifier = Modifier
+                                .background(
+                                    if (rowIndex % 2 == 0)
+                                        Black.copy(alpha = 0.55f)
+                                    else
+                                        Black.copy(alpha = 0.45f)
+                                )
+                                .height(IntrinsicSize.Min)
+                        ) {
+                            repeat(columnsCount) { col ->
+                                BodyCell(
+                                    text = row.getOrNull(col).orEmpty(),
+                                    width = columnWidths[col],
+                                    style = cellTextStyle,
+                                    color = textColor,
+                                    padding = padding
+                                )
+
+                                if (col != columnsCount - 1) {
+                                    VerticalDivider(dividerWidth, dividerColor)
+                                }
+                            }
+                        }
+
+                        /* ---------- ГОРИЗОНТАЛЬНАЯ ЛИНИЯ МЕЖДУ СТРОКАМИ ---------- */
+
+                        if (rowIndex != rows.lastIndex) {
+                            HorizontalTableDivider(
+                                height = 0.75.dp,
+                                color = dividerColor.copy(alpha = 0.6f)
+                            )
+                        }
+                        HorizontalTableDivider(
+                            height = 1.dp,
+                            color = dividerColor
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
 private fun CodeBlockWithHeader(
     code: String,
     language: String?,
@@ -315,7 +629,6 @@ private fun CodeBlockWithHeader(
     onCreateNote: ((String) -> Unit)?
 ) {
     val context = LocalContext.current
-    val colorScheme = MaterialTheme.colorScheme
 
     Column(
         modifier = Modifier
@@ -323,7 +636,6 @@ private fun CodeBlockWithHeader(
             .clip(RoundedCornerShape(8.dp))
             .background(Black)
     ) {
-        // Header with language name and copy button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -332,7 +644,6 @@ private fun CodeBlockWithHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Language name
             Text(
                 text = language?.uppercase() ?: "CODE",
                 color = textColor.copy(alpha = 0.7f),
@@ -341,16 +652,11 @@ private fun CodeBlockWithHeader(
                 fontFamily = FontFamily.Monospace
             )
 
-            // Copy button
             IconButton(
                 onClick = {
                     val clip = ClipData.newPlainText("code", code)
-                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(
-                        clip
-                    )
-                    Toast
-                        .makeText(context, "Код скопирован", Toast.LENGTH_SHORT)
-                        .show()
+                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
+                    Toast.makeText(context, "Код скопирован", Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.size(24.dp)
             ) {
@@ -363,14 +669,12 @@ private fun CodeBlockWithHeader(
             }
         }
 
-        // Horizontal divider line
         HorizontalDivider(
             modifier = Modifier.fillMaxWidth(),
             thickness = 1.dp,
             color = Color.Gray.copy(alpha = 0.3f)
         )
 
-        // Code content
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -410,16 +714,8 @@ fun ThinkBlockWithHeader(
     textColor: Color,
     onCreateNote: ((String) -> Unit)?
 ) {
-    val context = LocalContext.current
-    val colorScheme = MaterialTheme.colorScheme
-
-    // Цвет для think блока (слегка отличается от code блока)
-    val thinkBackgroundColor = Color(0xFF1A1A2E) // Темно-синеватый оттенок
-
-    // Состояние для сворачивания/разворачивания блока
+    val thinkBackgroundColor = Color(0xFF1A1A2E)
     var isExpanded by remember { mutableStateOf(false) }
-
-    // Анимация поворота стрелки
     val arrowRotation by animateFloatAsState(
         targetValue = if (isExpanded) 180f else 0f,
         animationSpec = tween(durationMillis = 200),
@@ -432,7 +728,6 @@ fun ThinkBlockWithHeader(
             .clip(RoundedCornerShape(8.dp))
             .background(thinkBackgroundColor)
     ) {
-        // Header with "Thought for X seconds" and expand/collapse button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -442,7 +737,6 @@ fun ThinkBlockWithHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // "Thought for X seconds" text
             Text(
                 text = if (durationSeconds > 0) {
                     String.format("Thought for %.1f seconds", durationSeconds)
@@ -455,7 +749,6 @@ fun ThinkBlockWithHeader(
                 fontFamily = FontFamily.Monospace
             )
 
-            // Expand/collapse button
             Icon(
                 painter = painterResource(id = R.drawable.ic_more),
                 contentDescription = if (isExpanded) "Свернуть" else "Развернуть",
@@ -466,7 +759,6 @@ fun ThinkBlockWithHeader(
             )
         }
 
-        // Анимированное содержимое блока
         AnimatedVisibility(
             visible = isExpanded,
             enter = expandVertically(
@@ -477,14 +769,12 @@ fun ThinkBlockWithHeader(
             )
         ) {
             Column {
-                // Horizontal divider line
                 HorizontalDivider(
                     modifier = Modifier.fillMaxWidth(),
                     thickness = 1.dp,
                     color = Color.Gray.copy(alpha = 0.3f)
                 )
 
-                // Think content
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -521,11 +811,8 @@ fun ThinkBlockWithHeader(
 private fun formatInlineMarkdown(text: String): AnnotatedString {
     return buildAnnotatedString {
         val patterns = listOf(
-            // Bold **text**
             Regex("\\*\\*(.+?)\\*\\*") to SpanStyle(fontWeight = FontWeight.Bold),
-            // Italic *text*
             Regex("\\*([^*]+?)\\*") to SpanStyle(fontStyle = FontStyle.Italic),
-            // Inline code `text`
             Regex("`([^`]+)`") to SpanStyle(
                 fontFamily = FontFamily.Monospace,
                 background = Black,
@@ -533,7 +820,6 @@ private fun formatInlineMarkdown(text: String): AnnotatedString {
             )
         )
 
-        // Найти все совпадения
         val matches = mutableListOf<Triple<IntRange, String, SpanStyle>>()
         patterns.forEach { (regex, style) ->
             regex.findAll(text).forEach { match ->
@@ -541,18 +827,14 @@ private fun formatInlineMarkdown(text: String): AnnotatedString {
             }
         }
 
-        // Сортировать по позиции
         matches.sortBy { it.first.first }
 
-        // Обработать текст
         var lastEnd = 0
         matches.forEach { (range, content, style) ->
-            // Добавить текст до совпадения
             if (range.first > lastEnd) {
                 append(text.substring(lastEnd, range.first))
             }
 
-            // Добавить стилизованный текст
             withStyle(style) {
                 append(content)
             }
@@ -560,7 +842,6 @@ private fun formatInlineMarkdown(text: String): AnnotatedString {
             lastEnd = range.last + 1
         }
 
-        // Добавить оставшийся текст
         if (lastEnd < text.length) {
             append(text.substring(lastEnd))
         }
