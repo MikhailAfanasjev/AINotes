@@ -73,6 +73,7 @@ import androidx.compose.ui.unit.times
 import com.example.ainotes.utils.MessageSegment
 import com.example.ainotes.utils.parseMarkdownText
 import com.example.ainotes.presentation.ui.theme.Black
+import com.example.ainotes.utils.MarkdownParser
 import com.example.linguareader.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -352,35 +353,77 @@ fun FormattedText(
 }
 
 @Composable
-private fun TableCell(
-    width: Dp,
-    alignment: MessageSegment.TableAlignment?,
-    dividerColor: Color,
-    content: @Composable BoxScope.() -> Unit
+private fun TableCellContent(
+    text: String,
+    textColor: Color,
+    onCreateNote: ((String) -> Unit)?,
+    textStyle: TextStyle
 ) {
-    Row(
-        modifier = Modifier
-            .width(width)
-            .height(IntrinsicSize.Min)
-    ) {
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .padding(12.dp),
-            contentAlignment = when (alignment) {
-                MessageSegment.TableAlignment.CENTER -> Alignment.Center
-                MessageSegment.TableAlignment.RIGHT -> Alignment.CenterEnd
-                else -> Alignment.CenterStart
-            },
-            content = content
-        )
+    var segments by remember { mutableStateOf<List<MessageSegment>>(emptyList()) }
 
-        Box(
-            modifier = Modifier
-                .width(1.dp)
-                .fillMaxHeight()
-                .background(dividerColor)
-        )
+    LaunchedEffect(text) {
+        segments = withContext(Dispatchers.Default) {
+            MarkdownParser.parseSegments(text)
+        }
+    }
+
+    Column {
+        segments.forEach { segment ->
+            when (segment) {
+                is MessageSegment.Text -> {
+                    if (onCreateNote != null) {
+                        NoteSelectionContainer(
+                            text = segment.content,
+                            onCreateNote = onCreateNote,
+                            textColor = textColor,
+                            backgroundColor = Color.Transparent,
+                            fontSize = textStyle.fontSize,
+                            fontWeight = textStyle.fontWeight ?: FontWeight.Normal,
+                            fontStyle = textStyle.fontStyle ?: FontStyle.Normal,
+                            isCode = false
+                        )
+                    } else {
+                        Text(
+                            text = formatInlineMarkdown(segment.content),
+                            style = textStyle,
+                            color = textColor,
+                            softWrap = true
+                        )
+                    }
+                }
+
+                is MessageSegment.Code -> {
+                    Text(
+                        text = segment.content,
+                        style = textStyle.copy(
+                            fontFamily = FontFamily.Monospace,
+                            background = Black
+                        ),
+                        color = textColor
+                    )
+                }
+
+                is MessageSegment.UnorderedListItem -> {
+                    Text(
+                        text = "• ${segment.content}",
+                        style = textStyle,
+                        color = textColor
+                    )
+                }
+
+                is MessageSegment.OrderedListItem -> {
+                    Text(
+                        text = "${segment.number}. ${segment.content}",
+                        style = textStyle,
+                        color = textColor
+                    )
+                }
+
+                else -> {
+                    // table внутри table запрещаем
+                }
+            }
+        }
     }
 }
 
@@ -398,12 +441,11 @@ private fun HeaderCell(
             .padding(horizontal = padding, vertical = 8.dp),
         contentAlignment = Alignment.CenterStart
     ) {
-        Text(
+        TableCellContent(
             text = text,
-            style = style,
-            color = color.copy(alpha = 0.75f),
-            softWrap = true,
-            maxLines = Int.MAX_VALUE
+            textColor = color.copy(alpha = 0.75f),
+            onCreateNote = null,
+            textStyle = style
         )
     }
 }
@@ -412,9 +454,10 @@ private fun HeaderCell(
 private fun BodyCell(
     text: String,
     width: Dp,
-    style: TextStyle,
+    textStyle: TextStyle,
     color: Color,
-    padding: Dp
+    padding: Dp,
+    onCreateNote: ((String) -> Unit)?
 ) {
     Box(
         modifier = Modifier
@@ -422,14 +465,11 @@ private fun BodyCell(
             .padding(horizontal = padding, vertical = 8.dp),
         contentAlignment = Alignment.CenterStart
     ) {
-        Text(
+        TableCellContent(
             text = text,
-            style = style,
-            color = color,
-            softWrap = true,
-            maxLines = Int.MAX_VALUE,
-            overflow = TextOverflow.Clip,
-            modifier = Modifier.fillMaxWidth()
+            textColor = color,
+            onCreateNote = onCreateNote,
+            textStyle = textStyle
         )
     }
 }
@@ -590,9 +630,10 @@ fun TableView(
                                 BodyCell(
                                     text = row.getOrNull(col).orEmpty(),
                                     width = columnWidths[col],
-                                    style = cellTextStyle,
+                                    textStyle = cellTextStyle,
                                     color = textColor,
-                                    padding = padding
+                                    padding = padding,
+                                    onCreateNote = onCreateNote
                                 )
 
                                 if (col != columnsCount - 1) {
