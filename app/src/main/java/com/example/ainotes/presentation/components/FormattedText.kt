@@ -1,5 +1,6 @@
 package com.example.ainotes.presentation.components
 
+import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -15,29 +16,21 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,14 +55,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.times
 import com.example.ainotes.utils.MessageSegment
 import com.example.ainotes.utils.parseMarkdownText
 import com.example.ainotes.presentation.ui.theme.Black
@@ -194,7 +184,6 @@ fun FormattedText(
                         TableView(
                             headers = segment.headers,
                             rows = segment.rows,
-                            alignments = segment.alignments,
                             textColor = textColor,
                             onCreateNote = onCreateNote
                         )
@@ -330,7 +319,6 @@ fun FormattedText(
                             TableView(
                                 headers = segment.headers,
                                 rows = segment.rows,
-                                alignments = segment.alignments,
                                 textColor = textColor,
                                 onCreateNote = null
                             )
@@ -502,14 +490,12 @@ private fun HorizontalTableDivider(
 fun TableView(
     headers: List<String>,
     rows: List<List<String>>,
-    alignments: List<MessageSegment.TableAlignment>,
     textColor: Color,
     onCreateNote: ((String) -> Unit)?
 ) {
     val horizontalScroll = rememberScrollState()
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
-
     val minColWidth = 72.dp
     val maxColWidth = 320.dp
     val padding = 12.dp
@@ -748,6 +734,7 @@ private fun CodeBlockWithHeader(
     }
 }
 
+@SuppressLint("DefaultLocale")
 @Composable
 fun ThinkBlockWithHeader(
     content: String,

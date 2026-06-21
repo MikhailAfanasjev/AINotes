@@ -1,11 +1,12 @@
 package com.example.ainotes.data.local.entity
 
-import io.realm.RealmObject
-import io.realm.annotations.PrimaryKey
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 
-open class Note(
-    @PrimaryKey
-    var id: Long = 0,
-    var title: String = "",
-    var note: String = ""
-) : RealmObject()
+@Entity(tableName = "notes")
+data class Note(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val title: String = "",
+    val note: String = ""   // переименовано из "note", чтобы избежать путаницы
+)

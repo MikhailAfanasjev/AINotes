@@ -69,7 +69,7 @@ fun ChatListItem(
             )
 
             Text(
-                text = dateFormat.format(Date(chat.createdAt)),
+                text = dateFormat.format(Date(chat.lastMessageAt)),
                 style = MaterialTheme.typography.bodySmall,
                 color = if (isSelected)
                     colorScheme.onPrimaryContainer.copy(alpha = 0.7f)

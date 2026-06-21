@@ -31,8 +31,15 @@ import javax.inject.Inject
 import android.content.Context
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlin.text.StringBuilder
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val api: ChatGPTApiService,
@@ -117,108 +124,63 @@ class ChatViewModel @Inject constructor(
 
         // загрузка из БД
         viewModelScope.launch {
-            val persisted = chatRepo.getAllMessages()
-                // фильтруем пустые
-                .filter { it.contentRaw.isNotBlank() }
-                // конвертируем каждую строку в String
-                .map { entity ->
-                    Message(
-                        role = entity.role,
-                        content = entity.contentRaw,
-                        isComplete = entity.isComplete,
-                        reasoningContent = entity.reasoningContent.takeIf { it.isNotBlank() },
-                        reasoningDurationSeconds = if (entity.reasoningDurationSeconds > 0f) entity.reasoningDurationSeconds else null
-                    )
+            _currentChatId
+                .filterNotNull()
+                .flatMapLatest { chatId ->
+                    chatRepo.getMessagesByChatId(chatId)
+                        .map { entities ->
+                            entities.filter { it.contentRaw.isNotBlank() }
+                                .map { entity ->
+                                    Message(
+                                        role = entity.role,
+                                        content = entity.contentRaw,
+                                        isComplete = entity.isComplete,
+                                        reasoningContent = entity.reasoningContent.takeIf { it.isNotBlank() },
+                                        reasoningDurationSeconds = if (entity.reasoningDurationSeconds > 0f) entity.reasoningDurationSeconds else null
+                                    )
+                                }
+                        }
                 }
-            _chatMessages.value = persisted
+                .flowOn(Dispatchers.IO)
+                .collect { messages ->
+                    _chatMessages.value = messages
+                }
         }
 
-        // Загрузка списка моделей из API (без автоматической инициализации)
+        // Загрузка списка моделей
         loadAvailableModels()
     }
 
     fun setCurrentChatId(chatId: String?, skipLoad: Boolean = false) {
-        Log.d(
-            TAG,
-            "📝 setCurrentChatId вызван: $chatId (текущий: ${_currentChatId.value}), skipLoad=$skipLoad"
-        )
+        Log.d(TAG, "📝 setCurrentChatId: $chatId, skipLoad=$skipLoad")
 
-        // КРИТИЧЕСКИ ВАЖНО: Последовательность операций строго синхронизирована
-        // Шаг 1: Очищаем сообщения СИНХРОННО (если чат меняется)
+        // Синхронно очищаем сообщения, если чат меняется
         if (chatId != _currentChatId.value) {
-            Log.d(TAG, "🧹 Шаг 1: Немедленно (синхронно) очищаем сообщения")
             _chatMessages.value = emptyList()
         }
 
-        // Шаг 2: Обновляем currentChatId СИНХРОННО
-        Log.d(TAG, "📝 Шаг 2: Обновляем currentChatId: ${_currentChatId.value} -> $chatId")
         _currentChatId.value = chatId
-        Log.d(TAG, "✅ Шаг 2 завершен: _currentChatId.value = ${_currentChatId.value}")
 
-        // Шаг 3: Загружаем сообщения АСИНХРОННО (только если чат выбран и не skipLoad)
         if (chatId != null && !skipLoad) {
-            Log.d(TAG, "📂 Шаг 3: Запускаем асинхронную загрузку сообщений для чата: $chatId")
-            loadMessagesForChat(chatId)
+            // Flow автоматически загрузит сообщения – ничего не делаем
+            // Загружаем сохранённый промпт
+            viewModelScope.launch {
+                val chat = chatEntityRepo.getChatById(chatId)
+                val savedPrompt = chat?.selectedPrompt?.takeIf { it.isNotEmpty() }
+                _selectedPrompt.value = savedPrompt
+                _systemPrompt.value = savedPrompt ?: DEFAULT_SYSTEM_PROMPT
+            }
         } else if (chatId != null && skipLoad) {
-            Log.d(TAG, "⏭️ Шаг 3: Пропускаем загрузку сообщений (skipLoad=true)")
-            // При skipLoad НЕ загружаем промпт из БД, так как:
-            // 1. Для нового чата промпт еще не был сохранен
-            // 2. Пользователь мог выбрать FilterChip перед созданием чата
-            // 3. Текущий выбранный промпт уже находится в _selectedPrompt и _systemPrompt
-            Log.d(TAG, "ℹ️ Сохраняем текущий выбранный промпт: '${_selectedPrompt.value}'")
-
-            // Сохраняем текущий выбранный промпт в БД для нового чата
-            val currentPrompt = _selectedPrompt.value
-            if (currentPrompt != null) {
-                viewModelScope.launch {
+            viewModelScope.launch {
+                val currentPrompt = _selectedPrompt.value
+                if (currentPrompt != null) {
                     chatEntityRepo.updateChatSelectedPrompt(chatId, currentPrompt)
-                    Log.d(TAG, "💾 Текущий промпт сохранен в БД для нового чата: $chatId")
                 }
             }
         } else {
-            Log.d(TAG, "✅ Шаг 3: Чат не выбран (null), сообщения уже очищены")
-            // Дополнительная гарантия: еще раз убеждаемся, что сообщения точно пусты
             _chatMessages.value = emptyList()
-            // Сбрасываем выбранный промпт при отсутствии чата
             _selectedPrompt.value = null
             _systemPrompt.value = DEFAULT_SYSTEM_PROMPT
-        }
-
-        Log.d(
-            TAG,
-            "✅ setCurrentChatId завершен: currentChatId=${_currentChatId.value}, messages=${_chatMessages.value.size}"
-        )
-    }
-
-    private fun loadMessagesForChat(chatId: String) {
-        viewModelScope.launch {
-            val persisted = chatRepo.getMessagesByChatId(chatId)
-                .filter { it.contentRaw.isNotBlank() }
-                .map { entity ->
-                    Message(
-                        role = entity.role,
-                        content = entity.contentRaw,
-                        isComplete = entity.isComplete,
-                        reasoningContent = entity.reasoningContent.takeIf { it.isNotBlank() },
-                        reasoningDurationSeconds = if (entity.reasoningDurationSeconds > 0f) entity.reasoningDurationSeconds else null
-                    )
-                }
-            Log.d(TAG, "📥 Загружено сообщений из БД для чата $chatId: ${persisted.size}")
-            _chatMessages.value = persisted
-
-            // Загружаем сохраненный выбранный промпт для чата
-            val chat = chatEntityRepo.getChatById(chatId)
-            val savedPrompt = chat?.selectedPrompt?.takeIf { it.isNotEmpty() }
-            _selectedPrompt.value = savedPrompt
-
-            // Применяем сохраненный промпт к системе (или дефолтный)
-            if (savedPrompt != null) {
-                _systemPrompt.value = savedPrompt
-                Log.d(TAG, "✅ Восстановлен сохраненный промпт для чата $chatId")
-            } else {
-                _systemPrompt.value = DEFAULT_SYSTEM_PROMPT
-                Log.d(TAG, "✅ Применен дефолтный промпт для чата $chatId")
-            }
         }
     }
 
@@ -271,22 +233,21 @@ class ChatViewModel @Inject constructor(
 
     private fun addMessage(message: Message) {
         val currentChatId = _currentChatId.value ?: return
-
-        _chatMessages.value += message
+        val newMessage = ChatMessageEntity(
+            chatId = currentChatId,
+            role = message.role,
+            contentRaw = message.content,
+            timestamp = System.currentTimeMillis(),
+            isComplete = message.isComplete,
+            reasoningContent = message.reasoningContent ?: "",
+            reasoningDurationSeconds = message.reasoningDurationSeconds ?: 0f
+        )
         viewModelScope.launch {
-            chatRepo.addMessage(
-                ChatMessageEntity(
-                    chatId = currentChatId,
-                    role = message.role,
-                    contentRaw = message.content,
-                    timestamp = System.currentTimeMillis(),
-                    isComplete = true
-                )
-            )
-
-            // Обновляем информацию о чате
+            chatRepo.addMessage(newMessage)
             chatEntityRepo.updateChatLastMessage(currentChatId)
         }
+        // Обновляем UI немедленно
+        _chatMessages.value += message
     }
 
     private fun updateLastAssistantMessage(
@@ -688,45 +649,22 @@ class ChatViewModel @Inject constructor(
         }
 
         // Сохраняем готовый ответ в БД
-        chatRepo.addMessage(
-            ChatMessageEntity(
-                chatId = chatId,
-                role = "assistant",
-                contentRaw = finalRaw,
-                timestamp = System.currentTimeMillis(),
-                isComplete = true,
-                reasoningContent = finalReasoningContent ?: "",
-                reasoningDurationSeconds = finalReasoningDuration ?: 0f
-            )
+        val finalEntity = ChatMessageEntity(
+            chatId = chatId,
+            role = "assistant",
+            contentRaw = finalRaw,
+            timestamp = System.currentTimeMillis(),
+            isComplete = true,
+            reasoningContent = finalReasoningContent ?: "",
+            reasoningDurationSeconds = finalReasoningDuration ?: 0f
         )
-
-        // Обновляем информацию о чате
+        chatRepo.addMessage(finalEntity)
         chatEntityRepo.updateChatLastMessage(chatId)
-
-        // Логируем итоговые метрики
-        Log.d(
-            TAG,
-            "📊 Метрики генерации контента (БЕЗ reasoning): $tokenCount токенов за ${contentGenerationTime}мс (${
-                String.format(
-                    "%.2f",
-                    finalTokensPerSecond
-                )
-            } т/с)"
-        )
-
-        if (finalReasoningContent != null) {
-            Log.d(
-                TAG,
-                "🧠 Размышление: ${finalReasoningContent.length} символов за ${
-                    String.format("%.2f", finalReasoningDuration ?: 0f)
-                }с"
-            )
-        }
     }
+
 
     fun clearChat() {
         val currentChatId = _currentChatId.value ?: return
-
         _chatMessages.value = emptyList()
         viewModelScope.launch {
             chatRepo.deleteMessagesByChatId(currentChatId)
@@ -741,23 +679,14 @@ class ChatViewModel @Inject constructor(
         val currentChatId = _currentChatId.value ?: return
         val messages = _chatMessages.value.toMutableList()
         val lastAssistantIndex = messages.indexOfLast { it.role == "assistant" }
-
         if (lastAssistantIndex != -1) {
             messages.removeAt(lastAssistantIndex)
             _chatMessages.value = messages
-
-            // Также удаляем из базы данных
             viewModelScope.launch {
-                // Получаем все сообщения из БД и удаляем последнее сообщение ассистента
-                val allMessages = chatRepo.getMessagesByChatId(currentChatId)
-                val lastAssistantMessage = allMessages
-                    .filter { it.role == "assistant" }
-                    .maxByOrNull { it.timestamp }
-
-                lastAssistantMessage?.let { message ->
-                    chatRepo.deleteMessage(message)
-                }
-
+                // Удаляем последнее сообщение ассистента из БД
+                val all = chatRepo.getMessagesByChatId(currentChatId).firstOrNull() ?: emptyList()
+                val lastAssistant = all.filter { it.role == "assistant" }.maxByOrNull { it.timestamp }
+                lastAssistant?.let { chatRepo.deleteMessage(it) }
                 chatEntityRepo.updateChatLastMessage(currentChatId)
             }
         }
@@ -770,69 +699,31 @@ class ChatViewModel @Inject constructor(
     fun deleteMessage(messageContent: String, role: String) {
         val currentChatId = _currentChatId.value ?: return
         val messages = _chatMessages.value.toMutableList()
-
-        // Находим индекс сообщения, которое нужно удалить
-        val messageIndex = messages.indexOfFirst {
-            it.content == messageContent && it.role == role
-        }
-
+        val messageIndex = messages.indexOfFirst { it.content == messageContent && it.role == role }
         if (messageIndex != -1) {
-            // Если это сообщение пользователя, проверяем, есть ли следующее сообщение от ассистента
             val shouldDeleteAssistantResponse = role == "user" &&
                     messageIndex + 1 < messages.size &&
                     messages[messageIndex + 1].role == "assistant"
 
-            val assistantMessageContent = if (shouldDeleteAssistantResponse) {
-                messages[messageIndex + 1].content
-            } else null
-
-            // Удаляем сообщение пользователя
-            messages.removeAt(messageIndex)
-
-            // Удаляем следующий ответ ассистента, если он есть
-            if (shouldDeleteAssistantResponse && messageIndex < messages.size) {
+            if (shouldDeleteAssistantResponse) {
+                messages.removeAt(messageIndex + 1) // сначала удаляем ответ ассистента
+                messages.removeAt(messageIndex)     // потом сообщение пользователя
+            } else {
                 messages.removeAt(messageIndex)
-                Log.d(
-                    TAG,
-                    "🗑️ Также удаляем ответ ассистента: '${assistantMessageContent?.take(50)}...'"
-                )
             }
-
             _chatMessages.value = messages
 
-            // Удаляем из базы данных
             viewModelScope.launch {
-                val allMessages = chatRepo.getMessagesByChatId(currentChatId)
-                val messageToDelete = allMessages.find {
-                    it.contentRaw == messageContent && it.role == role
+                // Удаляем из БД
+                val all = chatRepo.getMessagesByChatId(currentChatId).firstOrNull() ?: emptyList()
+                val userMsg = all.find { it.contentRaw == messageContent && it.role == role }
+                userMsg?.let { chatRepo.deleteMessage(it) }
+                if (shouldDeleteAssistantResponse) {
+                    val assistantMsg = all
+                        .filter { it.role == "assistant" && it.timestamp > (userMsg?.timestamp ?: 0) }
+                        .minByOrNull { it.timestamp }
+                    assistantMsg?.let { chatRepo.deleteMessage(it) }
                 }
-
-                messageToDelete?.let { message ->
-                    chatRepo.deleteMessage(message)
-                    Log.d(
-                        TAG,
-                        "🗑️ Удалено сообщение: role=$role, content='${messageContent.take(50)}...'"
-                    )
-
-                    // Если это сообщение пользователя, ищем и удаляем следующий ответ ассистента
-                    if (role == "user" && assistantMessageContent != null) {
-                        // Находим следующее сообщение ассистента с timestamp больше текущего
-                        val assistantResponse = allMessages
-                            .filter { it.role == "assistant" && it.timestamp > message.timestamp }
-                            .minByOrNull { it.timestamp }
-
-                        assistantResponse?.let { assistantMsg ->
-                            chatRepo.deleteMessage(assistantMsg)
-                            Log.d(
-                                TAG,
-                                "🗑️ Удален ответ ассистента из БД: '${
-                                    assistantMsg.contentRaw.take(50)
-                                }...'"
-                            )
-                        }
-                    }
-                }
-
                 chatEntityRepo.updateChatLastMessage(currentChatId)
             }
         }

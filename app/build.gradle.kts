@@ -1,10 +1,10 @@
+@file:Suppress("DEPRECATION")
+
 plugins {
     alias(libs.plugins.compose.compiler)
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("kotlin-kapt")
-    id("dagger.hilt.android.plugin")
-    id("realm-android")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt.android.plugin)
 }
 
 android {
@@ -34,12 +34,8 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-    }
-    kotlinOptions {
-        jvmTarget = "1.8"
-        freeCompilerArgs = listOf("-XXLanguage:+PropertyParamAnnotationDefaultTargetMode")
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
     buildFeatures {
         compose = true
@@ -52,6 +48,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    buildToolsVersion = "36.1.0"
     buildFeatures {
         buildConfig = true
         compose = true
@@ -59,76 +56,59 @@ android {
 }
 
 dependencies {
-    implementation (libs.ui.tooling.preview) // Для Preview
-    implementation (libs.androidx.core.splashscreen)
+    implementation(libs.androidx.ui.tooling.preview)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
-    implementation(libs.androidx.core.ktx)  // Основная библиотека Android KTX
-    implementation(libs.androidx.lifecycle.runtime.ktx)  // Жизненный цикл KTX
-    implementation(libs.androidx.activity.compose)  // Поддержка компонентов Activity для Compose
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.constraintlayout.compose)
-    implementation(platform(libs.androidx.compose.bom))  // BOM для управления версиями Compose
-    implementation(libs.androidx.ui)  // Основной модуль Compose UI
-    implementation(libs.androidx.ui.graphics)  // Библиотека графики Compose
-    implementation(libs.androidx.ui.tooling.preview)  // Поддержка предпросмотра в Android Studio
-    implementation(libs.androidx.material3)  // Material Design 3 для Jetpack Compose
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.ui.graphics)
+    implementation(libs.androidx.material3)
     implementation(libs.material)
-    implementation (libs.androidx.hilt.navigation.compose.v100)
-    implementation (libs.androidx.foundation)
+    implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.foundation)
     implementation(libs.androidx.runtime.livedata)
-    implementation(libs.androidx.espresso.core)
     implementation(libs.androidx.recyclerview)
     implementation(libs.androidx.appcompat)
     implementation(libs.protolite.well.known.types)
     implementation(libs.androidx.ui.test.android)
 
-    implementation(libs.androidx.core.ktx.v1160)
-    implementation (libs.androidx.navigation.compose.v289)
+    implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.work.runtime.ktx)
 
-    implementation (libs.androidx.datastore.preferences)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.datastore.core.android)
 
-    implementation (libs.androidx.lifecycle.viewmodel.ktx)
-    implementation (libs.androidx.datastore.preferences)
-
-    //Realm
-    implementation (libs.realm.android.library)
-
-    //Room
+    // Room с KSP
     implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.ui.test.android)
-    kapt(libs.androidx.room.compiler)
+    ksp(libs.androidx.room.compiler)          // <-- было kapt
     implementation(libs.androidx.room.ktx)
 
-    // PdfRenderer
     implementation(libs.pdfbox.android)
 
-    implementation(libs.hilt.android.v252)
-    implementation (libs.androidx.datastore.preferences)    // ↓ см. примечание
-    implementation (libs.androidx.datastore.core.android)  // для core‑API
-    kapt (libs.dagger.hilt.android.compiler)
-    kapt(libs.hilt.compiler.v252)
-    // Gson
-    implementation (libs.gson)
+    // Hilt с KSP
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)                   // <-- было kapt
 
-    // Тестирование
-    testImplementation(libs.junit)  // JUnit для юнит-тестирования
-    androidTestImplementation(libs.androidx.junit)  // JUnit для UI тестирования
-    androidTestImplementation(libs.androidx.espresso.core)  // Espresso для UI тестов
+    implementation(libs.gson)
+
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)  // JUnit 4 для тестирования UI Compose
+    androidTestImplementation(libs.androidx.ui.test.junit4)
 
-    // Дебаг зависимости
-    debugImplementation(libs.androidx.ui.tooling)  // Предпросмотр инструментов
-    debugImplementation(libs.androidx.ui.test.manifest)  // Манифест для тестирования
+    debugImplementation(libs.androidx.ui.tooling)
+    debugImplementation(libs.androidx.ui.test.manifest)
 
-    // Retrofit и конвертер Gson для работы с сетью
-    implementation(libs.retrofit.v2100)
-    implementation(libs.converter.gson.v2100)
-    implementation (libs.logging.interceptor)
-    implementation (libs.androidx.security.crypto)
-}
-kapt {
-    correctErrorTypes = true
+    implementation(libs.retrofit)
+    implementation(libs.converter.gson)
+    implementation(libs.logging.interceptor)
+    implementation(libs.androidx.security.crypto)
 }

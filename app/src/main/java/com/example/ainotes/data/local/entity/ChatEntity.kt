@@ -1,16 +1,16 @@
 package com.example.ainotes.data.local.entity
 
-import io.realm.RealmObject
-import io.realm.annotations.PrimaryKey
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 import java.util.UUID
 
-open class ChatEntity(
+@Entity(tableName = "chats")
+data class ChatEntity(
     @PrimaryKey
-    var id: String = UUID.randomUUID().toString(),
+    val id: String = UUID.randomUUID().toString(),
     var title: String = "",
-    var createdAt: Long = System.currentTimeMillis(),
     var lastMessageAt: Long = System.currentTimeMillis(),
     var messageCount: Int = 0,
-    var isTitleGenerated: Boolean = false, // Флаг для отслеживания, был ли заголовок сгенерирован автоматически
-    var selectedPrompt: String = "" // Сохраненный промпт для FilterChip (пустая строка = не выбран)
-) : RealmObject()
+    var isTitleGenerated: Boolean = false,
+    var selectedPrompt: String = ""
+)

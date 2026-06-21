@@ -1,17 +1,31 @@
 package com.example.ainotes.data.local.entity
 
-import io.realm.RealmObject
-import io.realm.annotations.PrimaryKey
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.PrimaryKey
 import java.util.UUID
 
-open class ChatMessageEntity(
+@Entity(
+    tableName = "chat_messages",
+    foreignKeys = [
+        ForeignKey(
+            entity = ChatEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["chatId"],
+            onDelete = ForeignKey.CASCADE   // при удалении чата удаляются все его сообщения
+        )
+    ],
+    indices = [Index("chatId")]   // ускоряет запросы по chatId
+)
+data class ChatMessageEntity(
     @PrimaryKey
-    var id: String = UUID.randomUUID().toString(),
-    var chatId: String = "", // ID чата, к которому принадлежит сообщение
-    var role: String = "", // "user" или "assistant"
-    var contentRaw: String = "",
-    var timestamp: Long = System.currentTimeMillis(),
-    var isComplete: Boolean = true,
-    var reasoningContent: String = "", // Содержимое блока размышлений (reasoning_content)
-    var reasoningDurationSeconds: Float = 0f // Время генерации размышлений в секундах
-) : RealmObject()
+    val id: String = UUID.randomUUID().toString(),
+    val chatId: String,
+    val role: String,                     // "user" или "assistant"
+    val contentRaw: String = "",
+    val timestamp: Long = System.currentTimeMillis(),
+    val isComplete: Boolean = true,
+    val reasoningContent: String = "",
+    val reasoningDurationSeconds: Float = 0f
+)

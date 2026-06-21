@@ -905,7 +905,7 @@ fun SettingsDrawer(
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_add_chat),
                                     contentDescription = "Создать новый чат",
-                                    tint = colorScheme.primary,
+                                    tint = colorScheme.onSurface,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }

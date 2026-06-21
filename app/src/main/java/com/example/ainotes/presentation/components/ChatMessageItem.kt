@@ -196,7 +196,7 @@ fun ChatMessageItem(
                             Spacer(modifier = Modifier.weight(1f))
                         }
 
-                        // Кнопки действий справа
+                        // Кнопки действий снизу
                         Row(
                             verticalAlignment = Alignment.CenterVertically
                         ) {

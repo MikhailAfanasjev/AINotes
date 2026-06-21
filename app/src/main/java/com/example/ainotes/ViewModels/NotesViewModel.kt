@@ -8,6 +8,9 @@ import com.example.ainotes.data.repository.NoteRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -17,70 +20,46 @@ class NotesViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _notes = MutableStateFlow<List<Note>>(emptyList())
-    val notes: StateFlow<List<Note>> = _notes
+    val notes: StateFlow<List<Note>> = _notes.asStateFlow()
 
     init {
-        loadNotes()
+        noteRepository.getAllNotes()
+            .onEach { list ->
+                Log.d("NotesViewModel", "Loaded notes: ${list.size}")
+                _notes.value = list
+            }
+            .launchIn(viewModelScope)
     }
 
-    /**
-     * Загрузить все заметки и обновить StateFlow
-     */
-    private fun loadNotes() {
-        viewModelScope.launch {
-            val list = noteRepository.getAllNotes()
-            Log.d("NotesViewModel", "Loaded notes: ${'$'}{list.size}")
-            _notes.value = list
-        }
-    }
-
-    /**
-     * Создать новую заметку
-     */
-    fun addNote(title: String, content: String) {
-        val newNote = Note().apply {
-            id = System.currentTimeMillis()
-            this.title = title
-            note = content
-        }
+    fun addNote(title: String, note: String) {
+        val newNote = Note(
+            title = title,
+            note = note
+        )
         viewModelScope.launch {
             noteRepository.addNote(newNote)
-            loadNotes()
         }
     }
 
-    /**
-     * Обновить существующую заметку
-     */
-    fun updateNote(noteId: Long, title: String, content: String) {
+    fun updateNote(noteId: Long, title: String, note: String) {
         viewModelScope.launch {
-            val list = noteRepository.getAllNotes()
-            list.find { it.id == noteId }?.let {
-                it.title = title
-                it.note = content
-                noteRepository.addNote(it)
-                loadNotes()
+            val existing = _notes.value.find { it.id == noteId }
+            existing?.let {
+                val updated = it.copy(title = title, note = note)
+                noteRepository.addNote(updated)
             }
         }
     }
 
-    /**
-     * Удалить одну заметку
-     */
     fun deleteNote(note: Note) {
         viewModelScope.launch {
             noteRepository.deleteNote(note)
-            loadNotes()
         }
     }
 
-    /**
-     * Удалить все заметки
-     */
     fun deleteAllNotes() {
         viewModelScope.launch {
             noteRepository.deleteAllNotes()
-            loadNotes()
         }
     }
 }
