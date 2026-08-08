@@ -4,7 +4,7 @@
 
 Пользователь может:
 
-* Вести диалог с ассистентом
+* Вести диалог с LLM
 
   <p align="left">
     <img src="https://github.com/user-attachments/assets/d80bda05-1305-40e3-b8d1-b6fea20fe415" alt="AINotes Screenshot" width="300"/>
