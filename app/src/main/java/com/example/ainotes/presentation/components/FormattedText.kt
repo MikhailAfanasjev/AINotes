@@ -1,37 +1,33 @@
 package com.example.ainotes.presentation.components
 
-import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.DividerDefaults.color
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Surface
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,697 +40,395 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ainotes.utils.MessageSegment
-import com.example.ainotes.utils.parseMarkdownText
-import com.example.ainotes.presentation.ui.theme.Black
+import com.example.ainotes.R
 import com.example.ainotes.utils.MarkdownParser
-import com.example.linguareader.R
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.example.ainotes.utils.MessageSegment
 
 @Composable
 fun FormattedText(
     text: String,
     textColor: Color,
     modifier: Modifier = Modifier,
+    fontSize: Float? = null,
+    fontWeight: FontWeight? = null,
+    fontStyle: FontStyle? = null,
+    isCode: Boolean = false,
     onCreateNote: ((String) -> Unit)? = null
 ) {
     var segments by remember { mutableStateOf<List<MessageSegment>>(emptyList()) }
 
     LaunchedEffect(text) {
-        segments = withContext(Dispatchers.IO) {
-            parseMarkdownText(text)
-        }
+        segments = MarkdownParser.parseSegments(text)
     }
 
-    if (onCreateNote != null) {
-        Column(modifier = modifier) {
-            segments.forEach { segment ->
-                when (segment) {
-                    is MessageSegment.Text -> {
-                        NoteSelectionContainer(
-                            text = segment.content,
-                            onCreateNote = onCreateNote,
-                            textColor = textColor,
-                            backgroundColor = Color.Transparent,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Normal,
-                            fontStyle = FontStyle.Normal,
-                            isCode = false
-                        )
-                    }
-
-                    is MessageSegment.Code -> {
-                        CodeBlockWithHeader(
-                            code = segment.content.trim(),
-                            language = segment.language,
-                            textColor = textColor,
-                            onCreateNote = onCreateNote
-                        )
-                    }
-
-                    is MessageSegment.Think -> {
-                        ThinkBlockWithHeader(
-                            content = segment.content.trim(),
-                            durationSeconds = segment.durationSeconds,
-                            textColor = textColor,
-                            onCreateNote = onCreateNote
-                        )
-                    }
-
-                    is MessageSegment.Header -> {
-                        val (fontSize, fontWeight, topPadding) = when (segment.level) {
-                            1 -> Triple(30.sp, FontWeight.Bold, 16.dp)
-                            2 -> Triple(22.sp, FontWeight.Bold, 14.dp)
-                            3 -> Triple(18.sp, FontWeight.Bold, 12.dp)
-                            4 -> Triple(16.sp, FontWeight.Bold, 10.dp)
-                            5 -> Triple(14.sp, FontWeight.Bold, 8.dp)
-                            6 -> Triple(12.sp, FontWeight.Bold, 6.dp)
-                            else -> Triple(14.sp, FontWeight.Bold, 8.dp)
-                        }
-
-                        NoteSelectionContainer(
-                            text = segment.content,
-                            onCreateNote = onCreateNote,
-                            textColor = if (segment.level == 6) textColor.copy(alpha = 0.7f) else textColor,
-                            backgroundColor = Color.Transparent,
-                            fontSize = fontSize,
-                            fontWeight = fontWeight,
-                            fontStyle = FontStyle.Normal,
-                            isCode = false
-                        )
-                    }
-
-                    is MessageSegment.Quote -> {
-                        NoteSelectionContainer(
-                            text = segment.content,
-                            onCreateNote = onCreateNote,
-                            textColor = textColor.copy(alpha = 0.8f),
-                            backgroundColor = Color.Gray.copy(alpha = 0.1f),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Normal,
-                            fontStyle = FontStyle.Italic,
-                            isCode = false
-                        )
-                    }
-
-                    is MessageSegment.UnorderedListItem -> {
-                        NoteSelectionContainer(
-                            text = "• ${segment.content}",
-                            onCreateNote = onCreateNote,
-                            textColor = textColor,
-                            backgroundColor = Color.Transparent,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Normal,
-                            fontStyle = FontStyle.Normal,
-                            isCode = false
-                        )
-                    }
-
-                    is MessageSegment.OrderedListItem -> {
-                        NoteSelectionContainer(
-                            text = "${segment.number}. ${segment.content}",
-                            onCreateNote = onCreateNote,
-                            textColor = textColor,
-                            backgroundColor = Color.Transparent,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Normal,
-                            fontStyle = FontStyle.Normal,
-                            isCode = false
-                        )
-                    }
-
-                    is MessageSegment.Table -> {
-                        TableView(
-                            headers = segment.headers,
-                            rows = segment.rows,
-                            textColor = textColor,
-                            onCreateNote = onCreateNote
-                        )
-                    }
-
-                    is MessageSegment.HorizontalRule -> {
-                        HorizontalDivider(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            thickness = 1.dp,
-                            color = textColor.copy(alpha = 0.3f)
-                        )
-                    }
-                }
-            }
-        }
-    } else {
-        SelectionContainer {
-            Column(modifier = modifier) {
-                segments.forEach { segment ->
-                    when (segment) {
-                        is MessageSegment.Text -> {
-                            Text(
-                                text = formatInlineMarkdown(segment.content),
-                                color = textColor,
-                                fontSize = 14.sp,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
-
-                        is MessageSegment.Code -> {
-                            CodeBlockWithHeader(
-                                code = segment.content.trim(),
-                                language = segment.language,
-                                textColor = textColor,
-                                onCreateNote = null
-                            )
-                        }
-
-                        is MessageSegment.Think -> {
-                            ThinkBlockWithHeader(
-                                content = segment.content.trim(),
-                                durationSeconds = segment.durationSeconds,
-                                textColor = textColor,
-                                onCreateNote = null
-                            )
-                        }
-
-                        is MessageSegment.Header -> {
-                            val (fontSize, fontWeight, topPadding) = when (segment.level) {
-                                1 -> Triple(30.sp, FontWeight.Bold, 16.dp)
-                                2 -> Triple(22.sp, FontWeight.Bold, 14.dp)
-                                3 -> Triple(18.sp, FontWeight.Bold, 12.dp)
-                                4 -> Triple(16.sp, FontWeight.Bold, 10.dp)
-                                5 -> Triple(14.sp, FontWeight.Bold, 8.dp)
-                                6 -> Triple(12.sp, FontWeight.Bold, 6.dp)
-                                else -> Triple(14.sp, FontWeight.Bold, 8.dp)
-                            }
-
-                            Text(
-                                text = formatInlineMarkdown(segment.content),
-                                color = if (segment.level == 6) textColor.copy(alpha = 0.7f) else textColor,
-                                fontSize = fontSize,
-                                fontWeight = fontWeight,
-                                modifier = Modifier.padding(top = topPadding, bottom = 4.dp)
-                            )
-                        }
-
-                        is MessageSegment.Quote -> {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(
-                                        color = Color.Gray.copy(alpha = 0.1f),
-                                        shape = RoundedCornerShape(4.dp)
-                                    )
-                                    .padding(12.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .background(
-                                            color = textColor.copy(alpha = 0.4f),
-                                            shape = RoundedCornerShape(2.dp)
-                                        )
-                                        .width(4.dp)
-                                        .height(20.dp)
-                                )
-
-                                Text(
-                                    text = formatInlineMarkdown(segment.content),
-                                    color = textColor.copy(alpha = 0.8f),
-                                    fontSize = 14.sp,
-                                    fontStyle = FontStyle.Italic,
-                                    modifier = Modifier.padding(start = 12.dp)
-                                )
-                            }
-                        }
-
-                        is MessageSegment.UnorderedListItem -> {
-                            Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                                Text(
-                                    text = "•",
-                                    color = textColor,
-                                    fontSize = 14.sp,
-                                    modifier = Modifier.padding(end = 8.dp)
-                                )
-                                Text(
-                                    text = formatInlineMarkdown(segment.content),
-                                    color = textColor,
-                                    fontSize = 14.sp
-                                )
-                            }
-                        }
-
-                        is MessageSegment.OrderedListItem -> {
-                            Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                                Text(
-                                    text = "${segment.number}.",
-                                    color = textColor,
-                                    fontSize = 14.sp,
-                                    modifier = Modifier.padding(end = 8.dp)
-                                )
-                                Text(
-                                    text = formatInlineMarkdown(segment.content),
-                                    color = textColor,
-                                    fontSize = 14.sp
-                                )
-                            }
-                        }
-
-                        is MessageSegment.Table -> {
-                            TableView(
-                                headers = segment.headers,
-                                rows = segment.rows,
-                                textColor = textColor,
-                                onCreateNote = null
-                            )
-                        }
-
-                        is MessageSegment.HorizontalRule -> {
-                            HorizontalDivider(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                thickness = 2.dp,
-                                color = textColor.copy(alpha = 0.3f)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TableCellContent(
-    text: String,
-    textColor: Color,
-    onCreateNote: ((String) -> Unit)?,
-    textStyle: TextStyle
-) {
-    var segments by remember { mutableStateOf<List<MessageSegment>>(emptyList()) }
-
-    LaunchedEffect(text) {
-        segments = withContext(Dispatchers.Default) {
-            MarkdownParser.parseSegments(text)
-        }
-    }
-
-    Column {
-        segments.forEach { segment ->
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        segments.forEachIndexed { index, segment ->
             when (segment) {
                 is MessageSegment.Text -> {
-                    if (onCreateNote != null) {
-                        NoteSelectionContainer(
-                            text = segment.content,
-                            onCreateNote = onCreateNote,
-                            textColor = textColor,
-                            backgroundColor = Color.Transparent,
-                            fontSize = textStyle.fontSize,
-                            fontWeight = textStyle.fontWeight ?: FontWeight.Normal,
-                            fontStyle = textStyle.fontStyle ?: FontStyle.Normal,
-                            isCode = false
-                        )
-                    } else {
-                        Text(
-                            text = formatInlineMarkdown(segment.content),
-                            style = textStyle,
-                            color = textColor,
-                            softWrap = true
-                        )
-                    }
-                }
-
-                is MessageSegment.Code -> {
                     Text(
                         text = segment.content,
-                        style = textStyle.copy(
-                            fontFamily = FontFamily.Monospace,
-                            background = Black
-                        ),
-                        color = textColor
+                        color = textColor,
+                        fontSize = ((fontSize ?: 14f)).sp,
+                        fontWeight = fontWeight,
+                        fontStyle = fontStyle,
+                        lineHeight = 20.sp,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
 
-                is MessageSegment.UnorderedListItem -> {
+                is MessageSegment.Header -> {
+                    val headerFontSize = when (segment.level) {
+                        1 -> 24.sp
+                        2 -> 20.sp
+                        3 -> 18.sp
+                        else -> 16.sp
+                    }
+
                     Text(
-                        text = "• ${segment.content}",
-                        style = textStyle,
-                        color = textColor
+                        text = segment.content,
+                        color = textColor,
+                        fontSize = headerFontSize,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                is MessageSegment.Code -> {
+                    CodeBlockWithCopyButton(
+                        code = segment.content,
+                        language = segment.language,
+                        textColor = textColor,
+                        onCreateNote = onCreateNote
+                    )
+                }
+
+                is MessageSegment.Table -> {
+                    MarkdownTable(
+                        headers = segment.headers,
+                        rows = segment.rows,
+                        alignments = segment.alignments,
+                        textColor = textColor
+                    )
+                }
+
+                is MessageSegment.Quote -> {
+                    QuoteBlock(
+                        content = segment.content,
+                        textColor = textColor
+                    )
+                }
+
+                is MessageSegment.HorizontalRule -> {
+                    HorizontalDivider(
+                        modifier = Modifier.fillMaxWidth(),
+                        thickness = 1.dp,
+                        color = Color.Gray.copy(alpha = 0.3f)
                     )
                 }
 
                 is MessageSegment.OrderedListItem -> {
-                    Text(
-                        text = "${segment.number}. ${segment.content}",
-                        style = textStyle,
-                        color = textColor
+                    ListItem(
+                        content = segment.content,
+                        number = segment.number,
+                        textColor = textColor,
+                        isOrdered = true
                     )
                 }
 
-                else -> {
-                    // table внутри table запрещаем
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HeaderCell(
-    text: String,
-    width: Dp,
-    style: TextStyle,
-    color: Color,
-    padding: Dp
-) {
-    Box(
-        modifier = Modifier
-            .width(width)
-            .padding(horizontal = padding, vertical = 8.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        TableCellContent(
-            text = text,
-            textColor = color.copy(alpha = 0.75f),
-            onCreateNote = null,
-            textStyle = style
-        )
-    }
-}
-
-@Composable
-private fun BodyCell(
-    text: String,
-    width: Dp,
-    textStyle: TextStyle,
-    color: Color,
-    padding: Dp,
-    onCreateNote: ((String) -> Unit)?
-) {
-    Box(
-        modifier = Modifier
-            .width(width)
-            .padding(horizontal = padding, vertical = 8.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        TableCellContent(
-            text = text,
-            textColor = color,
-            onCreateNote = onCreateNote,
-            textStyle = textStyle
-        )
-    }
-}
-
-@Composable
-private fun VerticalDivider(width: Dp, color: Color) {
-    Box(
-        modifier = Modifier
-            .width(width)
-            .fillMaxHeight()
-            .background(color)
-    )
-}
-
-@Composable
-private fun HorizontalTableDivider(
-    height: Dp,
-    color: Color
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(height)
-            .background(color)
-    )
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun TableView(
-    headers: List<String>,
-    rows: List<List<String>>,
-    textColor: Color,
-    onCreateNote: ((String) -> Unit)?
-) {
-    val horizontalScroll = rememberScrollState()
-    val textMeasurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val minColWidth = 72.dp
-    val maxColWidth = 320.dp
-    val padding = 12.dp
-    val dividerWidth = 1.dp
-
-    val columnsCount = remember(headers, rows) {
-        maxOf(headers.size, rows.maxOfOrNull { it.size } ?: 0)
-    }
-
-    val cellTextStyle = TextStyle(
-        fontSize = 12.sp,
-        fontFamily = FontFamily.Monospace,
-        lineHeight = 18.sp
-    )
-
-    val headerTextStyle = TextStyle(
-        fontSize = 11.sp,
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Medium
-    )
-
-    /* ---------- COLUMN WIDTHS ---------- */
-
-    val columnWidths = remember(headers, rows) {
-        (0 until columnsCount).map { col ->
-            val texts = buildList {
-                headers.getOrNull(col)?.let { add(it) }
-                rows.forEach { it.getOrNull(col)?.let(::add) }
-            }
-
-            val maxWidthPx = texts.maxOfOrNull { text ->
-                textMeasurer.measure(
-                    text = AnnotatedString(text),
-                    style = cellTextStyle,
-                    constraints = Constraints(maxWidth = Int.MAX_VALUE)
-                ).size.width
-            } ?: with(density) { minColWidth.toPx().toInt() }
-
-            val padded = maxWidthPx +
-                    with(density) { (padding * 2).toPx().toInt() }
-
-            with(density) {
-                padded
-                    .coerceIn(
-                        minColWidth.toPx().toInt(),
-                        maxColWidth.toPx().toInt()
+                is MessageSegment.UnorderedListItem -> {
+                    ListItem(
+                        content = segment.content,
+                        textColor = textColor,
+                        isOrdered = false
                     )
-                    .toDp()
-            }
-        }
-    }
-
-    val totalTableWidth = remember(columnWidths, columnsCount) {
-        columnWidths.fold(0.dp) { acc, w -> acc + w } +
-                dividerWidth * (columnsCount - 1)
-    }
-
-    val dividerColor = Color.Gray.copy(alpha = 0.3f)
-
-    /* ---------- TABLE ---------- */
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .clip(RoundedCornerShape(8.dp)),
-        color = Black
-    ) {
-        Box(
-            modifier = Modifier.horizontalScroll(horizontalScroll)
-        ) {
-            Column(
-                modifier = Modifier.width(totalTableWidth)
-            ) {
-
-                /* ----- HEADER ----- */
-
-                Row(
-                    modifier = Modifier
-                        .background(Black.copy(alpha = 0.85f))
-                        .height(IntrinsicSize.Min)
-                ) {
-                    repeat(columnsCount) { col ->
-                        HeaderCell(
-                            text = headers.getOrNull(col).orEmpty(),
-                            width = columnWidths[col],
-                            style = headerTextStyle,
-                            color = textColor,
-                            padding = padding
-                        )
-                        if (col != columnsCount - 1) {
-                            VerticalDivider(dividerWidth, dividerColor)
-                        }
-                    }
                 }
 
-                HorizontalTableDivider(
-                    height = 1.25.dp,
-                    color = dividerColor
-                )
-
-                /* ----- BODY (БЕЗ LazyColumn ❗) ----- */
-
-                Column {
-                    rows.forEachIndexed { rowIndex, row ->
-
-                        Row(
-                            modifier = Modifier
-                                .background(
-                                    if (rowIndex % 2 == 0)
-                                        Black.copy(alpha = 0.55f)
-                                    else
-                                        Black.copy(alpha = 0.45f)
-                                )
-                                .height(IntrinsicSize.Min)
-                        ) {
-                            repeat(columnsCount) { col ->
-                                BodyCell(
-                                    text = row.getOrNull(col).orEmpty(),
-                                    width = columnWidths[col],
-                                    textStyle = cellTextStyle,
-                                    color = textColor,
-                                    padding = padding,
-                                    onCreateNote = onCreateNote
-                                )
-
-                                if (col != columnsCount - 1) {
-                                    VerticalDivider(dividerWidth, dividerColor)
-                                }
-                            }
-                        }
-
-                        /* ---------- ГОРИЗОНТАЛЬНАЯ ЛИНИЯ МЕЖДУ СТРОКАМИ ---------- */
-
-                        if (rowIndex != rows.lastIndex) {
-                            HorizontalTableDivider(
-                                height = 0.75.dp,
-                                color = dividerColor.copy(alpha = 0.6f)
-                            )
-                        }
-                        HorizontalTableDivider(
-                            height = 1.dp,
-                            color = dividerColor
-                        )
-                    }
+                is MessageSegment.Think -> {
+                    ThinkBlockWithHeader(
+                        content = segment.content.trim(),
+                        durationSeconds = segment.durationSeconds,
+                        textColor = textColor,
+                        onCreateNote = onCreateNote
+                    )
                 }
             }
         }
     }
 }
 
-
 @Composable
-private fun CodeBlockWithHeader(
+private fun CodeBlockWithCopyButton(
     code: String,
     language: String?,
     textColor: Color,
     onCreateNote: ((String) -> Unit)?
 ) {
-    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    var isExpanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(Black)
+            .background(Color(0xFF1E1E1E))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Black.copy(alpha = 0.8f))
+                .background(Color(0xFF2D2D2D))
+                .clickable { isExpanded = !isExpanded }
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = language?.uppercase() ?: "CODE",
-                color = textColor.copy(alpha = 0.7f),
-                fontSize = 11.sp,
+                text = language ?: "code",
+                color = Color.Gray.copy(alpha = 0.7f),
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 fontFamily = FontFamily.Monospace
             )
 
-            IconButton(
-                onClick = {
-                    val clip = ClipData.newPlainText("code", code)
-                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
-                    Toast.makeText(context, "Код скопирован", Toast.LENGTH_SHORT).show()
-                },
-                modifier = Modifier.size(24.dp)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_copy),
-                    contentDescription = "Копировать код",
+                    painter = painterResource(id = R.drawable.ic_more),
+                    contentDescription = if (isExpanded) "Свернуть" else "Развернуть",
                     modifier = Modifier.size(16.dp),
-                    tint = textColor.copy(alpha = 0.7f)
+                    tint = Color.Gray.copy(alpha = 0.7f)
                 )
+
+                IconButton(
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(code))
+                    },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_copy),
+                        contentDescription = "Копировать",
+                        modifier = Modifier.size(16.dp),
+                        tint = Color.Gray.copy(alpha = 0.7f)
+                    )
+                }
+
+                if (onCreateNote != null) {
+                    IconButton(
+                        onClick = { onCreateNote(code) },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_notes),
+                            contentDescription = "Создать заметку",
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.Gray.copy(alpha = 0.7f)
+                        )
+                    }
+                }
             }
         }
 
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(),
+            exit = shrinkVertically()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp)
+            ) {
+                if (onCreateNote != null) {
+                    NoteSelectionContainer(
+                        text = code,
+                        onCreateNote = onCreateNote,
+                        textColor = textColor,
+                        backgroundColor = Color.Transparent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Normal,
+                        fontStyle = FontStyle.Normal,
+                        isCode = true
+                    )
+                } else {
+                    SelectionContainer {
+                        Text(
+                            text = code,
+                            color = textColor,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            softWrap = false
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MarkdownTable(
+    headers: List<String>,
+    rows: List<List<String>>,
+    alignments: List<MessageSegment.TableAlignment>,
+    textColor: Color
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(vertical = 4.dp)
+    ) {
+        // Заголовки таблицы
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(1.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            headers.forEachIndexed { index, header ->
+                val alignment = alignments.getOrNull(index) ?: MessageSegment.TableAlignment.LEFT
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    contentAlignment = when (alignment) {
+                        MessageSegment.TableAlignment.CENTER -> Alignment.Center
+                        MessageSegment.TableAlignment.RIGHT -> Alignment.CenterEnd
+                        else -> Alignment.CenterStart
+                    }
+                ) {
+                    Text(
+                        text = header,
+                        color = textColor,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+
+        // Разделитель заголовков
         HorizontalDivider(
             modifier = Modifier.fillMaxWidth(),
             thickness = 1.dp,
             color = Color.Gray.copy(alpha = 0.3f)
         )
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(12.dp)
-        ) {
-            if (onCreateNote != null) {
-                NoteSelectionContainer(
-                    text = code,
-                    onCreateNote = onCreateNote,
-                    textColor = textColor,
-                    backgroundColor = Color.Transparent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Normal,
-                    fontStyle = FontStyle.Normal,
-                    isCode = true
-                )
-            } else {
-                SelectionContainer {
-                    Text(
-                        text = code,
-                        color = textColor,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                        softWrap = false
-                    )
+        // Строки таблицы
+        rows.forEach { row ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(1.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                row.forEachIndexed { index, cell ->
+                    val alignment = alignments.getOrNull(index) ?: MessageSegment.TableAlignment.LEFT
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        contentAlignment = when (alignment) {
+                            MessageSegment.TableAlignment.CENTER -> Alignment.Center
+                            MessageSegment.TableAlignment.RIGHT -> Alignment.CenterEnd
+                            else -> Alignment.CenterStart
+                        }
+                    ) {
+                        Text(
+                            text = cell,
+                            color = textColor,
+                            fontSize = 13.sp
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-@SuppressLint("DefaultLocale")
+@Composable
+private fun QuoteBlock(
+    content: String,
+    textColor: Color
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp)
+    ) {
+        // Вертикальная линия слева
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(24.dp)
+                .background(Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(1.5.dp))
+        )
+
+        Text(
+            text = content,
+            color = textColor.copy(alpha = 0.8f),
+            fontStyle = FontStyle.Italic,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            modifier = Modifier.padding(start = 8.dp)
+        )
+    }
+}
+
+@Composable
+private fun ListItem(
+    content: String,
+    textColor: Color,
+    number: Int? = null,
+    isOrdered: Boolean = true
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        if (isOrdered && number != null) {
+            Text(
+                text = "$number.",
+                color = textColor,
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .background(Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(3.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                // Bullet point for unordered list
+            }
+        }
+
+        Text(
+            text = content,
+            color = textColor,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
 @Composable
 fun ThinkBlockWithHeader(
     content: String,
@@ -742,7 +436,7 @@ fun ThinkBlockWithHeader(
     textColor: Color,
     onCreateNote: ((String) -> Unit)?
 ) {
-    val thinkBackgroundColor = Color(0xFF1A1A2E)
+    val thinkBackgroundColor = MaterialTheme.colorScheme.onBackground
     var isExpanded by remember { mutableStateOf(false) }
     val arrowRotation by animateFloatAsState(
         targetValue = if (isExpanded) 180f else 0f,
@@ -843,35 +537,49 @@ private fun formatInlineMarkdown(text: String): AnnotatedString {
             Regex("\\*([^*]+?)\\*") to SpanStyle(fontStyle = FontStyle.Italic),
             Regex("`([^`]+)`") to SpanStyle(
                 fontFamily = FontFamily.Monospace,
-                background = Black,
+                background = Color.Black,
                 fontSize = 12.sp
             )
         )
 
-        val matches = mutableListOf<Triple<IntRange, String, SpanStyle>>()
-        patterns.forEach { (regex, style) ->
-            regex.findAll(text).forEach { match ->
-                matches.add(Triple(match.range, match.groupValues[1], style))
+        var remainingText = text
+        val spans = mutableListOf<TextSpan>()
+
+        for ((pattern, spanStyle) in patterns) {
+            val matches = pattern.findAll(remainingText).toList()
+            if (matches.isEmpty()) continue
+
+            var lastEnd = 0
+            for (match in matches) {
+                if (match.range.first > lastEnd) {
+                    spans.add(TextSpan(remainingText.substring(lastEnd, match.range.first), SpanStyle()))
+                }
+
+                val innerText = match.groupValues[1]
+                spans.add(TextSpan(innerText, spanStyle))
+                lastEnd = match.range.last + 1
             }
+
+            if (lastEnd < remainingText.length) {
+                spans.add(TextSpan(remainingText.substring(lastEnd), SpanStyle()))
+            }
+
+            remainingText = matches.joinToString("") { it.groupValues[1] }
         }
 
-        matches.sortBy { it.first.first }
-
-        var lastEnd = 0
-        matches.forEach { (range, content, style) ->
-            if (range.first > lastEnd) {
-                append(text.substring(lastEnd, range.first))
+        if (spans.isEmpty()) {
+            append(text)
+        } else {
+            for (span in spans) {
+                withStyle(span.style) {
+                    append(span.text)
+                }
             }
-
-            withStyle(style) {
-                append(content)
-            }
-
-            lastEnd = range.last + 1
-        }
-
-        if (lastEnd < text.length) {
-            append(text.substring(lastEnd))
         }
     }
 }
+
+private data class TextSpan(
+    val text: String,
+    val style: SpanStyle
+)

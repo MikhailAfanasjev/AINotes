@@ -33,13 +33,14 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.ainotes.chatGPT.Message
 import com.example.ainotes.viewModels.ChatViewModel
-import com.example.linguareader.R
+import com.example.ainotes.R
 
-@SuppressLint("ConfigurationScreenWidthHeight")
+@SuppressLint("ConfigurationScreenWidthHeight", "DefaultLocale", "LocalContextGetResourceValueCall")
 @Composable
 fun ChatMessageItem(
     chatViewModel: ChatViewModel = hiltViewModel(),
@@ -130,7 +131,7 @@ fun ChatMessageItem(
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_edit_message),
-                                contentDescription = "Редактировать сообщение",
+                                contentDescription = stringResource(R.string.edit_message),
                                 modifier = Modifier.size(16.dp),
                                 tint = colorScheme.onSecondary
                             )
@@ -224,15 +225,14 @@ fun ChatMessageItem(
                                     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(
                                         clip
                                     )
-                                    Toast
-                                        .makeText(context, "Текст скопирован", Toast.LENGTH_SHORT)
-                                        .show()
+                                    val msg = context.getString(R.string.copy_text)
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                 },
                                 modifier = Modifier.size(24.dp)
                             ) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_copy),
-                                    contentDescription = "Копировать ответ",
+                                    contentDescription = stringResource(R.string.copy_response),
                                     modifier = Modifier.size(16.dp),
                                     tint = colorScheme.onSecondary
                                 )
@@ -247,7 +247,7 @@ fun ChatMessageItem(
                             ) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_reload),
-                                    contentDescription = "Повторить ответ",
+                                    contentDescription = stringResource(R.string.retry_response),
                                     modifier = Modifier.size(16.dp),
                                     tint = colorScheme.onSecondary
                                 )

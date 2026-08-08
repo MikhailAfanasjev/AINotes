@@ -16,18 +16,17 @@ class BaseUrlInterceptor(
         val req = chain.request()
         val currentBase = baseUrlManager.getBaseUrl()
 
-        Log.d(TAG, "🔗 Исходный URL: ${req.url}")
-        Log.d(TAG, "🌐 Базовый URL из настроек: $currentBase")
+
 
         // Если базовый URL пустой или некорректный, используем исходный запрос
         if (currentBase.isEmpty()) {
-            Log.e(TAG, "❌ Базовый URL пустой, используем исходный запрос")
+
             return chain.proceed(req)
         }
 
         val newBaseUrl = currentBase.toHttpUrlOrNull()
         if (newBaseUrl == null) {
-            Log.e(TAG, "❌ Некорректный базовый URL: $currentBase")
+
             return chain.proceed(req)  // на случай некорректного URL
         }
 
@@ -38,7 +37,7 @@ class BaseUrlInterceptor(
             .port(newBaseUrl.port)
             .build()
 
-        Log.d(TAG, "✅ Новый URL: $newUrl")
+
 
         val newReq = req.newBuilder()
             .url(newUrl)

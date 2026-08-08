@@ -1,5 +1,6 @@
 package com.example.ainotes.presentation.screens
 
+import android.annotation.SuppressLint
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -36,7 +38,9 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.example.ainotes.viewModels.NotesViewModel
 import com.example.ainotes.utils.cleanResponse
+import com.example.ainotes.R
 
+@SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 fun AddEditNoteScreen(
     navController: NavController,
@@ -122,10 +126,12 @@ fun AddEditNoteScreen(
                 onClick = {
                     if (!isEditing) {
                         viewModel.addNote(title, noteContent)
-                        Toast.makeText(context, "Заметка добавлена", Toast.LENGTH_SHORT).show()
+                        val msg = context.getString(R.string.note_added)
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     } else {
                         viewModel.updateNote(noteIdLong!!, title, noteContent)
-                        Toast.makeText(context, "Заметка обновлена", Toast.LENGTH_SHORT).show()
+                        val msg = context.getString(R.string.note_updated)
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     }
                     navController.navigate("notes") {
                         popUpTo(navController.graph.id) { inclusive = true }
@@ -137,7 +143,7 @@ fun AddEditNoteScreen(
                     contentColor = Color.White),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (!isEditing) "Создать заметку" else "Обновить заметку")
+                Text(if (!isEditing) stringResource(R.string.create_note_btn) else stringResource(R.string.update_note_btn))
             }
 
             Spacer(Modifier.height(8.dp))
@@ -158,7 +164,7 @@ fun AddEditNoteScreen(
                     contentColor = Color.White),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Отменить")
+                Text(stringResource(R.string.cancel_btn))
             }
         }
     }

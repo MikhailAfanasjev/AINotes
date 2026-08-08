@@ -8,11 +8,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.linguareader"
+    namespace = "com.example.ainotes"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.linguareader"
+        applicationId = "com.example.ainotes"
         minSdk = 29
         targetSdk = 36
         versionCode = 1

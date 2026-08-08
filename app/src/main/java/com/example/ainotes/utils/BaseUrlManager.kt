@@ -47,13 +47,13 @@ class BaseUrlManager(private val context: Context) {
             // Если используем LM Studio - получаем URL из ConnectionSettingsManager
             connectionSettingsManager.isLMStudioMode() -> {
                 val activeUrl = connectionSettingsManager.getActiveUrl()
-                Log.d(TAG, "🌐 Режим LM Studio. Active URL: $activeUrl")
+
 
                 // Если используем NGROK - проверяем сохраненный публичный URL
                 if (!connectionSettingsManager.isLocalNetworkMode()) {
                     val savedNgrokUrl = sharedPrefs.getString(KEY_BASE_URL, "") ?: ""
                     if (savedNgrokUrl.isNotEmpty()) {
-                        Log.d(TAG, "🔗 Используем сохраненный NGROK URL: $savedNgrokUrl")
+
                         return savedNgrokUrl
                     }
                 }
@@ -62,7 +62,7 @@ class BaseUrlManager(private val context: Context) {
             }
             // Если используем API ключ - возвращаем стандартный URL OpenAI
             else -> {
-                Log.d(TAG, "🔑 Режим API ключ. Используем OpenAI URL")
+
                 "https://api.openai.com"
             }
         }
@@ -85,18 +85,18 @@ class BaseUrlManager(private val context: Context) {
      * и на Main потоке сохраняет его в EncryptedSharedPreferences.
      */
     fun updateBaseUrlFromNgrok() {
-        Log.d(TAG, "🚀 updateBaseUrlFromNgrok(): старт корутины для запроса Ngrok URL")
+
         scope.launch {
             val newUrl = fetchNgrokHttpsTunnel()
-            Log.d(TAG, "🔄 fetchNgrokHttpsTunnel() вернул: $newUrl")
+
             if (newUrl != null) {
                 // переключаемся на Main для работы с SharedPreferences и UI-лога
                 withContext(Dispatchers.Main) {
                     setBaseUrl(newUrl)
-                    Log.d(TAG, "✅ setBaseUrl(): сохранён новый URL -> $newUrl")
+
                 }
             } else {
-                Log.w(TAG, "⚠️ fetchNgrokHttpsTunnel() вернул null, URL не обновлён")
+
             }
         }
     }
@@ -109,11 +109,11 @@ class BaseUrlManager(private val context: Context) {
         val ngrokApiKey = getNgrokApiKey()
 
         if (ngrokApiUrl.isEmpty() || ngrokApiKey.isEmpty()) {
-            Log.w(TAG, "⚠️ NGROK API URL или API KEY не настроены")
+
             return@withContext null
         }
 
-        Log.d(TAG, "🌐 fetchNgrokHttpsTunnel(): делаем GET $ngrokApiUrl")
+
         var connection: HttpURLConnection? = null
         try {
             val url = URL(ngrokApiUrl)
@@ -126,7 +126,7 @@ class BaseUrlManager(private val context: Context) {
                 setRequestProperty("Ngrok-Version", "2")
             }
             val code = connection.responseCode
-            Log.d(TAG, "📶 Response code: $code")
+
             return@withContext when (connection.responseCode) {
                 HttpURLConnection.HTTP_OK -> {
                     BufferedReader(InputStreamReader(connection.inputStream)).use { reader ->
@@ -137,7 +137,7 @@ class BaseUrlManager(private val context: Context) {
                     null
                 }
                 HttpURLConnection.HTTP_FORBIDDEN -> {
-                    Log.e(TAG, "❌ Unauthorized/Forbidden при запросе к Ngrok API")
+
                     null
                 }
                 else -> {
@@ -145,7 +145,7 @@ class BaseUrlManager(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "🔥 Ошибка при запросе Ngrok API", e)
+
             null
         } finally {
             connection?.disconnect()
@@ -156,12 +156,12 @@ class BaseUrlManager(private val context: Context) {
      * Fetch a fresh HTTPS public_url from ngrok and save it.
      */
     suspend fun refreshPublicUrl(): String? = withContext(Dispatchers.IO) {
-        Log.d(TAG, "🔄 refreshPublicUrl(): попытка обновить URL из Ngrok API")
+
         val ngrokApiUrl = getNgrokApiUrl()
         val ngrokApiKey = getNgrokApiKey()
 
         if (ngrokApiUrl.isEmpty() || ngrokApiKey.isEmpty()) {
-            Log.w(TAG, "⚠️ NGROK API URL или API KEY не настроены")
+
             return@withContext null
         }
 

@@ -28,7 +28,7 @@ import com.example.ainotes.presentation.ui.theme.AiNotesTheme
 import com.example.ainotes.utils.dataStore
 import com.example.ainotes.viewModels.ChatViewModel
 import com.example.ainotes.viewModels.NotesViewModel
-import com.example.linguareader.R
+import com.example.ainotes.R
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
@@ -54,29 +55,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import com.example.ainotes.presentation.ui.theme.White
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
-import android.util.Log
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.Constraints
 import com.example.ainotes.presentation.components.ChatMessageItem
 import com.example.ainotes.presentation.components.FilterChip
+import com.example.ainotes.presentation.ui.theme.White
 import com.example.ainotes.utils.scrollToBottomWithOverflow
 import com.example.ainotes.viewModels.ChatListViewModel
 import com.example.ainotes.viewModels.ChatViewModel
-import com.example.linguareader.R
+import com.example.ainotes.R
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
@@ -118,11 +115,7 @@ fun ChatScreen(
     // Флаг для предотвращения автоматической синхронизации при создании нового чата
     val isCreatingNewChatWithMessage = remember { mutableStateOf(false) }
 
-    // Логирование для отладки - показывает текущее состояние при каждой рекомпозиции
-    Log.d(
-        ">>>ChatScreen",
-        "🔄 RECOMPOSITION: currentChatId=$currentChatId, chatViewModelChatId=$chatViewModelChatId, chatMessages=${chatMessages.size}, isChatsLoaded=$isChatsLoaded"
-    )
+
 
     // Инициализация первого чата при запуске, если нет активного чата
     // Используем флаг для отслеживания, был ли уже выполнен начальный запуск
@@ -131,7 +124,6 @@ fun ChatScreen(
     LaunchedEffect(currentChatId, chatList.size, isChatsLoaded) {
         // Ждем, пока чаты загрузятся из БД
         if (!isChatsLoaded) {
-            Log.d(">>>ChatScreen", "⏳ Ожидание загрузки чатов из БД...")
             return@LaunchedEffect
         }
 
@@ -140,18 +132,8 @@ fun ChatScreen(
             if (currentChatId == null && chatList.isNotEmpty()) {
                 // Если чаты есть, но нет выбранного - выбираем первый
                 val firstChatId = chatList.first().id
-                Log.d(
-                    ">>>ChatScreen",
-                    "📱 Выбираем существующий чат: ${chatList.first().title} (id: $firstChatId)"
-                )
                 chatListViewModel.selectChat(firstChatId)
                 // Синхронизация с ChatViewModel произойдет автоматически через LaunchedEffect(currentChatId)
-            } else if (currentChatId == null && chatList.isEmpty()) {
-                // Если нет чатов - просто показываем пустой экран с приглашением
-                Log.d(
-                    ">>>ChatScreen",
-                    "📭 Список чатов пуст - ожидаем, что пользователь создаст новый чат отправкой сообщения"
-                )
             }
             hasInitialized.value = true
         }
@@ -165,17 +147,8 @@ fun ChatScreen(
         if (chatViewModelChatId != currentChatId) {
             // Пропускаем автоматическую синхронизацию, если идет создание нового чата с сообщением
             if (isCreatingNewChatWithMessage.value) {
-                Log.d(
-                    ">>>ChatScreen",
-                    "⏭️ Пропускаем автоматическую синхронизацию (идет создание нового чата с сообщением)"
-                )
                 return@LaunchedEffect
             }
-
-            Log.d(
-                ">>>ChatScreen",
-                "🔄 Автоматическая синхронизация: currentChatId изменился $chatViewModelChatId -> $currentChatId"
-            )
 
             // Сбрасываем флаг взаимодействия при смене чата
             userInteracted.value = false
@@ -184,18 +157,6 @@ fun ChatScreen(
             // даже если currentChatId = null. Это гарантирует очистку сообщений.
             // ВАЖНО: Эта синхронизация загружает сообщения из БД (skipLoad=false по умолчанию)
             chatViewModel.setCurrentChatId(currentChatId)
-
-            if (currentChatId != null) {
-                Log.d(
-                    ">>>ChatScreen",
-                    "🔄 Автоматическая загрузка сообщений для чата: $currentChatId"
-                )
-            } else {
-                Log.d(
-                    ">>>ChatScreen",
-                    "🧹 Очищаем сообщения (currentChatId = null)"
-                )
-            }
         }
     }
 
@@ -203,48 +164,33 @@ fun ChatScreen(
     val requestNewChat by chatViewModel.requestNewChat.collectAsState()
     LaunchedEffect(requestNewChat) {
         requestNewChat?.let { messageText ->
-            Log.d(">>>ChatScreen", "📩 Получен запрос на создание чата для сообщения: $messageText")
 
             // Устанавливаем флаг, чтобы предотвратить автоматическую синхронизацию
             isCreatingNewChatWithMessage.value = true
 
             // Запоминаем старый chatId, чтобы дождаться изменения
             val oldChatId = currentChatId
-            Log.d(">>>ChatScreen", "📝 Текущий chatId перед созданием: $oldChatId")
 
             // Создаем новый чат
             chatListViewModel.createNewChat()
 
             // Ждем, пока currentChatId ИЗМЕНИТСЯ (станет другим, не null)
-            Log.d(">>>ChatScreen", "⏳ Ожидание создания НОВОГО чата в ChatListViewModel...")
             chatListViewModel.currentChatId
                 .first { it != null && it != oldChatId }
                 .let { newChatId ->
-                    Log.d(
-                        ">>>ChatScreen",
-                        "✅ Чат создан в ChatListViewModel: $newChatId (старый был: $oldChatId)"
-                    )
 
                     // Синхронизируем ChatViewModel с новым чатом БЕЗ загрузки сообщений
                     // (так как чат только что создан и пуст)
-                    Log.d(
-                        ">>>ChatScreen",
-                        "🔄 Синхронизируем ChatViewModel без загрузки сообщений..."
-                    )
                     chatViewModel.setCurrentChatId(newChatId, skipLoad = true)
-
-                    Log.d(">>>ChatScreen", "✅ ChatViewModel синхронизирован с чатом: $newChatId")
 
                     // Сбрасываем запрос перед отправкой
                     chatViewModel.clearNewChatRequest()
 
                     // Отправляем сообщение в новый чат
-                    Log.d(">>>ChatScreen", "📤 Отправляем сообщение в чат: $newChatId")
                     chatViewModel.sendMessage(messageText)
 
                     // Сбрасываем флаг после отправки сообщения
                     isCreatingNewChatWithMessage.value = false
-                    Log.d(">>>ChatScreen", "✅ Процесс создания чата с сообщением завершен")
                 }
         }
     }
@@ -314,11 +260,6 @@ fun ChatScreen(
 
     val colorScheme = MaterialTheme.colorScheme
 
-    Log.d(
-        ">>>ChatScreen",
-        "✅ Отображаем интерфейс: currentChatId=$currentChatId, chatViewModelChatId=$chatViewModelChatId, сообщений=${chatMessages.size}"
-    )
-
     // вертикальная укладка всех элементов экрана (чипы, сообщения, ввод)
     Column(
         modifier = Modifier
@@ -385,14 +326,14 @@ fun ChatScreen(
                                 modifier = Modifier.size(64.dp)
                             )
                             Spacer(modifier = Modifier.height(24.dp))
-                            Text(
-                                text = "Активируйте модель",
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = colorScheme.onSecondary
-                            )
+                                Text(
+                                    text = stringResource(R.string.activate_model),
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = colorScheme.onSecondary
+                                )
                             Spacer(modifier = Modifier.height(18.dp))
                             Text(
-                                text = "Для начала работы выберите AI модель",
+                                text = stringResource(R.string.activate_model_desc),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = colorScheme.onSecondary.copy(alpha = 0.7f)
                             )
@@ -401,7 +342,7 @@ fun ChatScreen(
 
                             // Кнопка открытия настроек
                             val textMeasurer = rememberTextMeasurer()
-                            val buttonText = "Выберите модель"
+                            val buttonText = stringResource(R.string.select_model_button)
                             val textStyle = MaterialTheme.typography.titleMedium
 
                             // Измеряем ширину текста
@@ -467,19 +408,19 @@ fun ChatScreen(
                         ) {
                             if (!isChatsLoaded || isCreatingChat) {
                                 Text(
-                                    text = "Загрузка чата...",
+                                    text = stringResource(R.string.chat_loading),
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = colorScheme.onBackground
                                 )
                             } else {
                                 Text(
-                                    text = "Начните новый чат",
+                                    text = stringResource(R.string.start_new_chat),
                                     style = MaterialTheme.typography.headlineSmall,
                                     color = colorScheme.onBackground
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "Введите сообщение, чтобы создать новый чат",
+                                    text = stringResource(R.string.start_new_chat_desc),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = colorScheme.onBackground.copy(alpha = 0.7f)
                                 )
@@ -593,7 +534,7 @@ fun ChatScreen(
                                 ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.ic_send_message),
-                                        contentDescription = "Отправить сообщение",
+                                        contentDescription = stringResource(R.string.send_message),
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
@@ -604,7 +545,7 @@ fun ChatScreen(
                                 ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.ic_stop),
-                                        contentDescription = "Остановить генерацию",
+                                        contentDescription = stringResource(R.string.stop_generation),
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
@@ -662,7 +603,7 @@ fun ChatScreen(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_more),
-                        contentDescription = "Прокрутить вниз",
+                        contentDescription = stringResource(R.string.scroll_down),
                         tint = colorScheme.onSecondary,
                         modifier = Modifier.size(16.dp)
                     )

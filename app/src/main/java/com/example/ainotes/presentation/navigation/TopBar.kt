@@ -45,7 +45,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import com.example.linguareader.R
+import com.example.ainotes.R
 import androidx.compose.ui.graphics.Color
 import com.example.ainotes.presentation.components.SettingsDrawer
 

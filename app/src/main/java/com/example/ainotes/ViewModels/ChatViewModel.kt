@@ -1,5 +1,6 @@
 package com.example.ainotes.viewModels
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ainotes.chatGPT.ChatGPTApiService
@@ -12,6 +13,7 @@ import com.example.ainotes.utils.NetworkUtils
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -21,16 +23,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.ResponseBody
 import okio.BufferedSource
-import retrofit2.Call
-import retrofit2.Callback
 import retrofit2.Response
 import java.io.IOException
 import javax.inject.Inject
-import android.content.Context
-import android.util.Log
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlin.text.StringBuilder
 import kotlinx.coroutines.flow.filterNotNull
@@ -50,8 +46,12 @@ class ChatViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        const val DEFAULT_SYSTEM_PROMPT = "Пиши ответы на русском языке"
-        private const val TAG = ">>>ChatViewModel"
+        const val DEFAULT_SYSTEM_PROMPT_KEY = "default_system_prompt"
+    }
+
+    // Читаем системный промпт из ресурсов приложения
+    private val defaultSystemPrompt: String by lazy {
+        context.getString(com.example.ainotes.R.string.default_system_prompt)
     }
 
     private val _chatMessages = MutableStateFlow<List<Message>>(emptyList())
@@ -63,14 +63,12 @@ class ChatViewModel @Inject constructor(
     private val _selectedModel = MutableStateFlow("")
     val selectedModel: StateFlow<String> = _selectedModel.asStateFlow()
 
-    private val _systemPrompt = MutableStateFlow(DEFAULT_SYSTEM_PROMPT)
+    private val _systemPrompt = MutableStateFlow(defaultSystemPrompt)
 
-    val defaultSystemPrompt: String = DEFAULT_SYSTEM_PROMPT
+    val defaultSystemPromptValue: String = defaultSystemPrompt
 
     private val _selectedPrompt = MutableStateFlow<String?>(null)
     val selectedPrompt: StateFlow<String?> = _selectedPrompt.asStateFlow()
-    private var currentCall: Call<ResponseBody>? = null
-    private var initializationCall: Call<ResponseBody>? = null
 
     // 1) флаг, показывает, идёт ли сейчас вывод ассистента
     private val _isAssistantWriting = MutableStateFlow(false)
@@ -111,10 +109,10 @@ class ChatViewModel @Inject constructor(
                 // Check connectivity
 
                 if (!NetworkUtils.isConnected(context)) {
-                    Log.w(TAG, "⚠️ Нет сети – пробуем обновить Ngrok URL")
+
                     // Try refresh ngrok URL
                     val newUrl = baseUrlManager.refreshPublicUrl()
-                    Log.d(TAG, "🔄 refreshPublicUrl() вернул $newUrl; текущий baseUrl: ${baseUrlManager.getBaseUrl()}")
+
                 }
                 // Launch sending
                 currentSendJob = viewModelScope.launch(Dispatchers.IO) { handleSend(input) }
@@ -152,35 +150,35 @@ class ChatViewModel @Inject constructor(
     }
 
     fun setCurrentChatId(chatId: String?, skipLoad: Boolean = false) {
-        Log.d(TAG, "📝 setCurrentChatId: $chatId, skipLoad=$skipLoad")
 
-        // Синхронно очищаем сообщения, если чат меняется
+
+        // Синхронно очищаем сообщения и сбрасываем выбор промпта при смене чата
         if (chatId != _currentChatId.value) {
             _chatMessages.value = emptyList()
+            _selectedPrompt.value = null
+            _systemPrompt.value = defaultSystemPrompt
         }
 
         _currentChatId.value = chatId
 
         if (chatId != null && !skipLoad) {
             // Flow автоматически загрузит сообщения – ничего не делаем
-            // Загружаем сохранённый промпт
+            // Загружаем сохранённый промпт из БД для этого чата
             viewModelScope.launch {
                 val chat = chatEntityRepo.getChatById(chatId)
                 val savedPrompt = chat?.selectedPrompt?.takeIf { it.isNotEmpty() }
                 _selectedPrompt.value = savedPrompt
-                _systemPrompt.value = savedPrompt ?: DEFAULT_SYSTEM_PROMPT
+                _systemPrompt.value = savedPrompt ?: defaultSystemPrompt
+
             }
         } else if (chatId != null && skipLoad) {
-            viewModelScope.launch {
-                val currentPrompt = _selectedPrompt.value
-                if (currentPrompt != null) {
-                    chatEntityRepo.updateChatSelectedPrompt(chatId, currentPrompt)
-                }
-            }
+            // При создании нового чата промпт уже сброшен синхронно выше.
+            // Не сохраняем старый выбор — каждый чат имеет независимый выбор промпта.
         } else {
+            // chatId == null - полная очистка
             _chatMessages.value = emptyList()
             _selectedPrompt.value = null
-            _systemPrompt.value = DEFAULT_SYSTEM_PROMPT
+            _systemPrompt.value = defaultSystemPrompt
         }
     }
 
@@ -189,27 +187,23 @@ class ChatViewModel @Inject constructor(
     }
 
     fun updateSelectedPrompt(prompt: String?) {
-        Log.d(
-            TAG,
-            "🎯 updateSelectedPrompt вызван: prompt='$prompt', currentChatId=${_currentChatId.value}"
-        )
 
         _selectedPrompt.value = prompt
 
         // ВАЖНО: Сразу применяем системный промпт
-        _systemPrompt.value = prompt ?: DEFAULT_SYSTEM_PROMPT
+        _systemPrompt.value = prompt ?: defaultSystemPrompt
 
-        Log.d(TAG, "✅ Системный промпт обновлен: '${_systemPrompt.value}'")
+
 
         // Сохраняем выбранный промпт в БД для текущего чата
         val currentChatId = _currentChatId.value
         if (currentChatId != null) {
             viewModelScope.launch {
                 chatEntityRepo.updateChatSelectedPrompt(currentChatId, prompt ?: "")
-                Log.d(TAG, "💾 Промпт сохранен в БД для чата: $currentChatId")
+
             }
         } else {
-            Log.w(TAG, "⚠️ Не удалось сохранить промпт - нет активного чата")
+
         }
     }
 
@@ -226,7 +220,7 @@ class ChatViewModel @Inject constructor(
 
         // Всегда переинициализируем модель при смене
         if (oldModel != model) {
-            Log.d(TAG, "🔄 Смена модели через setModel: $oldModel -> $model")
+
             initializeModel()
         }
     }
@@ -279,13 +273,13 @@ class ChatViewModel @Inject constructor(
         val currentChatId = _currentChatId.value
 
         if (currentChatId == null) {
-            Log.w(TAG, "⚠️ Попытка отправить сообщение без активного чата - запрашиваем создание нового")
+
             // Сохраняем сообщение для отправки после создания чата
             _requestNewChat.value = inputText
             return
         }
 
-        Log.d(TAG, "📤 Отправка сообщения в чат: $currentChatId")
+
         addMessage(Message(role = "user", content = inputText))
         messageQueue.trySend(inputText)
 
@@ -298,7 +292,7 @@ class ChatViewModel @Inject constructor(
 
                 // Генерируем заголовок после первого сообщения пользователя
                 if (userMessagesCount == 1) {
-                    Log.d(TAG, "🎯 Первое сообщение пользователя - запускаем генерацию заголовка")
+
                     generateChatTitle(currentChatId, inputText)
                 }
             }
@@ -320,7 +314,7 @@ class ChatViewModel @Inject constructor(
             _isTitleGenerating.value = true
 
             try {
-                Log.d(TAG, "🎯 Начинаем генерацию заголовка для чата: $chatId")
+
 
                 // Создаем специальный промпт для генерации заголовка
                 val titlePrompt = """
@@ -353,77 +347,65 @@ class ChatViewModel @Inject constructor(
                     stream = true
                 )
 
-                val titleCall = api.sendChatMessageCall(titleRequest)
                 val gson = Gson()
                 val titleBuilder = StringBuilder()
 
-                titleCall.enqueue(object : Callback<ResponseBody> {
-                    override fun onResponse(
-                        call: Call<ResponseBody>,
-                        response: Response<ResponseBody>
-                    ) {
-                        if (response.isSuccessful) {
-                            response.body()?.source()?.let { source ->
-                                viewModelScope.launch(Dispatchers.IO) {
-                                    try {
-                                        // Читаем стрим для получения заголовка
-                                        while (!source.exhausted()) {
-                                            val line = source.readUtf8Line().orEmpty()
-                                            if (line.trim() == "data: [DONE]") break
+                // Используем suspend функцию вместо callback
+                val response = api.sendChatMessage(titleRequest)
 
-                                            if (line.startsWith("data:")) {
-                                                val jsonLine = line.removePrefix("data:").trim()
-                                                val chunk = runCatching {
-                                                    gson.fromJson(jsonLine, JsonObject::class.java)
-                                                        .getAsJsonArray("choices")[0]
-                                                        .asJsonObject["delta"].asJsonObject
-                                                        .get("content")?.asString.orEmpty()
-                                                }.getOrNull().orEmpty()
+                if (response.isSuccessful) {
+                    response.body()?.source()?.let { source ->
+                        try {
+                            // Читаем стрим для получения заголовка
+                            while (!source.exhausted()) {
+                                val line = source.readUtf8Line().orEmpty()
+                                if (line.trim() == "data: [DONE]") break
 
-                                                if (chunk.isNotEmpty()) {
-                                                    titleBuilder.append(chunk)
-                                                }
-                                            }
-                                        }
+                                if (line.startsWith("data:")) {
+                                    val jsonLine = line.removePrefix("data:").trim()
+                                    val chunk = runCatching {
+                                        gson.fromJson(jsonLine, JsonObject::class.java)
+                                            .getAsJsonArray("choices")[0]
+                                            .asJsonObject["delta"].asJsonObject
+                                            .get("content")?.asString.orEmpty()
+                                    }.getOrNull().orEmpty()
 
-                                        // Очищаем заголовок от лишних символов и обрезаем
-                                        val generatedTitle = titleBuilder.toString()
-                                            .trim()
-                                            .replace(Regex("[\"'«»]"), "") // Убираем кавычки
-                                            .replace(Regex("\\s+"), " ") // Нормализуем пробелы
-                                            .take(60) // Ограничиваем длину
-                                            .ifEmpty { "Новый чат" }
-
-                                        Log.d(TAG, "✅ Сгенерирован заголовок: $generatedTitle")
-
-                                        // Обновляем заголовок в базе данных
-                                        chatEntityRepo.updateChatTitleGenerated(
-                                            chatId,
-                                            generatedTitle
-                                        )
-
-                                        _isTitleGenerating.value = false
-
-                                    } catch (e: IOException) {
-                                        Log.e(TAG, "❌ Ошибка при чтении стрима заголовка", e)
-                                        _isTitleGenerating.value = false
+                                    if (chunk.isNotEmpty()) {
+                                        titleBuilder.append(chunk)
                                     }
                                 }
                             }
-                        } else {
-                            Log.w(TAG, "⚠️ Ошибка генерации заголовка: ${response.code()}")
+
+                            // Очищаем заголовок от лишних символов и обрезаем
+                            val generatedTitle = titleBuilder.toString()
+                                .trim()
+                                .replace(Regex("[\"'«»]"), "") // Убираем кавычки
+                                .replace(Regex("\\s+"), " ") // Нормализуем пробелы
+                                .take(60) // Ограничиваем длину
+                                .ifEmpty { "Новый чат" }
+
+
+
+                            // Обновляем заголовок в базе данных
+                            chatEntityRepo.updateChatTitleGenerated(
+                                chatId,
+                                generatedTitle
+                            )
+
+                            _isTitleGenerating.value = false
+
+                        } catch (e: IOException) {
+
                             _isTitleGenerating.value = false
                         }
                     }
+                } else {
 
-                    override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
-                        Log.e(TAG, "❌ Исключение при генерации заголовка", t)
-                        _isTitleGenerating.value = false
-                    }
-                })
+                    _isTitleGenerating.value = false
+                }
 
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Общее исключение при генерации заголовка", e)
+
                 _isTitleGenerating.value = false
             }
         }
@@ -431,8 +413,7 @@ class ChatViewModel @Inject constructor(
 
     fun stopGeneration() {
         // отменяем сетевой вызов
-        currentCall?.cancel()
-        // сбрасываем флаг и помечаем последнее сообщение как завершённое
+        // В suspend-стиле отмена происходит через cancel корутины
         _isAssistantWriting.value = false
         val lastContent = _chatMessages.value.lastOrNull { it.role == "assistant" }?.content.orEmpty()
         updateLastAssistantMessage(content = lastContent, isComplete = true)
@@ -458,63 +439,50 @@ class ChatViewModel @Inject constructor(
         _isAssistantWriting.value = true
 
         // Логируем текущий системный промпт для отладки
-        Log.d(TAG, "📤 handleSend: используем системный промпт='${_systemPrompt.value}'")
+
 
         val allMessages = listOf(Message("system", _systemPrompt.value)) + _chatMessages.value
         val req = ChatGPTRequest(model = _selectedModel.value, messages = allMessages, stream = true)
 
-        // получаем Call вместо suspend
-        currentCall = api.sendChatMessageCall(req)
+        // Используем suspend функцию вместо callback
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val response = api.sendChatMessage(req)
 
-        // подготовили JSON‑парсер и StringBuilder для накопления чанков
-        val gson = Gson()
-        val builder = StringBuilder()
-
-        // добавляем пустое сообщение ассистента, которое будем обновлять
-        addMessage(Message(role = "assistant", content = "", isComplete = false))
-
-        currentCall?.enqueue(object : Callback<ResponseBody> {
-            override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
                 if (response.isSuccessful) {
                     response.body()?.source()?.let { source ->
-                        // читаем стрим в корутине IO
-                        viewModelScope.launch(Dispatchers.IO) {
-                            try {
-                                streamResponse(source, gson, builder, currentChatId)
-                            } catch (_: IOException) {
-                                // соединение было отменено — просто выходим
-                            } finally {
-                                _isAssistantWriting.value = false
-                            }
+                        try {
+                            streamResponse(source, currentChatId)
+                        } catch (_: IOException) {
+                            // соединение было отменено — просто выходим
+                        } finally {
+                            _isAssistantWriting.value = false
                         }
                     }
                 } else {
-                    viewModelScope.launch(Dispatchers.Main) {
+                    withContext(Dispatchers.Main) {
                         updateLastAssistantMessage("Ошибка: ${response.code()}", isComplete = true)
                         _isAssistantWriting.value = false
                     }
                 }
-            }
-
-            override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
-                // сюда придёт при cancel()
+            } catch (e: Exception) {
                 _isAssistantWriting.value = false
             }
-        })
+        }
     }
 
     // обновлена для работы с chatId
     private suspend fun streamResponse(
         source: BufferedSource,
-        gson: Gson,
-        builder: StringBuilder,
         chatId: String
     ) {
+        val builder = StringBuilder()
+        val gson = Gson()
+
         // Переменные для отслеживания метрик токенов (только для content, БЕЗ reasoning)
         val startTime = System.currentTimeMillis()
         var tokenCount = 0
         var contentStartTime: Long? = null // Время начала генерации content (без reasoning)
-        var lastUpdateTime = startTime
         var currentTokensPerSecond = 0f
 
         // Переменные для отслеживания reasoning content
@@ -545,7 +513,7 @@ class ChatViewModel @Inject constructor(
                         if (!isReasoningPhase) {
                             isReasoningPhase = true
                             reasoningStartTime = System.currentTimeMillis()
-                            Log.d(TAG, "🧠 Начало фазы размышления (reasoning)")
+
                         }
                         reasoningBuilder.append(reasoningChunk)
                         // НЕ увеличиваем tokenCount для reasoning!
@@ -557,23 +525,12 @@ class ChatViewModel @Inject constructor(
                         // Если была фаза размышления и она закончилась
                         if (isReasoningPhase && reasoningEndTime == null) {
                             reasoningEndTime = System.currentTimeMillis()
-                            val reasoningDuration =
-                                (reasoningEndTime!! - reasoningStartTime!!) / 1000f
-                            Log.d(
-                                TAG,
-                                "✅ Завершена фаза размышления: ${
-                                    String.format(
-                                        "%.2f",
-                                        reasoningDuration
-                                    )
-                                }с"
-                            )
                         }
 
                         // Засекаем время начала генерации content (БЕЗ учета reasoning)
                         if (contentStartTime == null) {
                             contentStartTime = System.currentTimeMillis()
-                            Log.d(TAG, "📝 Начало генерации контента (без учета reasoning)")
+
                         }
 
                         builder.append(contentChunk)
@@ -604,8 +561,6 @@ class ChatViewModel @Inject constructor(
                                 reasoningDurationSeconds = reasoningDurationSeconds
                             )
                         }
-
-                        lastUpdateTime = currentTime
                     }
                 }
             }
@@ -735,7 +690,7 @@ class ChatViewModel @Inject constructor(
     private fun initializeModel() {
         // Пропускаем инициализацию, если модель еще не выбрана
         if (_selectedModel.value.isEmpty()) {
-            Log.d(TAG, "⏭️ Пропуск инициализации: модель еще не выбрана")
+
             return
         }
 
@@ -744,11 +699,11 @@ class ChatViewModel @Inject constructor(
             _modelInitialized.value = false // Сбрасываем статус перед новой инициализацией
 
             try {
-                Log.d(TAG, "🚀 Инициализация модели: ${_selectedModel.value}")
+
 
                 // Проверяем подключение к сети
                 if (!NetworkUtils.isConnected(context)) {
-                    Log.w(TAG, "⚠️ Нет подключения к интернету при инициализации модели")
+
                     baseUrlManager.refreshPublicUrl()
                 }
 
@@ -760,137 +715,65 @@ class ChatViewModel @Inject constructor(
                     stream = true // Используем stream = true, так как LM Studio всегда стримит
                 )
 
-                Log.d(TAG, "📡 Отправляем запрос инициализации для ${_selectedModel.value}")
 
-                // Используем асинхронный вызов для обработки стрима
-                val call = api.sendChatMessageCall(initRequest)
-                initializationCall = call
 
-                call.enqueue(object : Callback<ResponseBody> {
-                    override fun onResponse(
-                        call: Call<ResponseBody>,
-                        response: Response<ResponseBody>
-                    ) {
-                        viewModelScope.launch(Dispatchers.IO) {
-                            Log.d(TAG, "📶 Ответ сервера: код ${response.code()}")
+                // Используем suspend функцию вместо callback
+                val response = api.sendChatMessage(initRequest)
 
-                            if (response.isSuccessful) {
-                                response.body()?.source()?.let { source ->
-                                    try {
-                                        // Читаем стрим для инициализации (не сохраняем содержимое)
-                                        var tokenCount = 0
-                                        val gson = Gson()
+                if (response.isSuccessful) {
+                    response.body()?.source()?.let { source ->
+                        try {
+                            // Читаем стрим для инициализации (не сохраняем содержимое)
+                            var tokenCount = 0
+                            val gson = Gson()
 
-                                        while (!source.exhausted()) {
-                                            val line = source.readUtf8Line().orEmpty()
-                                            if (line.trim() == "data: [DONE]") {
-                                                Log.d(
-                                                    TAG,
-                                                    "✅ Стрим инициализации завершен. Получено токенов: $tokenCount"
-                                                )
-                                                break
-                                            }
+                            while (!source.exhausted()) {
+                                val line = source.readUtf8Line().orEmpty()
+                                if (line.trim() == "data: [DONE]") {
+                                    break
+                                }
 
-                                            if (line.startsWith("data:")) {
-                                                val jsonLine = line.removePrefix("data:").trim()
-                                                val chunk = runCatching {
-                                                    gson.fromJson(jsonLine, JsonObject::class.java)
-                                                        .getAsJsonArray("choices")[0]
-                                                        .asJsonObject["delta"].asJsonObject
-                                                        .get("content")?.asString.orEmpty()
-                                                }.getOrNull().orEmpty()
+                                if (line.startsWith("data:")) {
+                                    val jsonLine = line.removePrefix("data:").trim()
+                                    val chunk = runCatching {
+                                        gson.fromJson(jsonLine, JsonObject::class.java)
+                                            .getAsJsonArray("choices")[0]
+                                            .asJsonObject["delta"].asJsonObject
+                                            .get("content")?.asString.orEmpty()
+                                    }.getOrNull().orEmpty()
 
-                                                if (chunk.isNotEmpty()) {
-                                                    tokenCount++
-                                                    // Каждые 100 токенов логируем прогресс
-                                                    if (tokenCount % 100 == 0) {
-                                                        Log.d(
-                                                            TAG,
-                                                            "🔄 Инициализация: получено $tokenCount токенов..."
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        withContext(Dispatchers.Main) {
-                                            _modelInitialized.value = true
-                                            Log.d(
-                                                TAG,
-                                                "✅ Модель ${_selectedModel.value} успешно инициализирована"
-                                            )
-                                        }
-
-                                    } catch (e: IOException) {
-                                        Log.e(TAG, "❌ Ошибка чтения стрима инициализации", e)
-                                        withContext(Dispatchers.Main) {
-                                            _modelInitialized.value = false
+                                    if (chunk.isNotEmpty()) {
+                                        tokenCount++
+                                        // Каждые 100 токенов логируем прогресс
+                                        if (tokenCount % 100 == 0) {
+                                            // Каждые 100 токенов логируем прогресс
                                         }
                                     }
-                                } ?: run {
-                                    Log.w(TAG, "⚠️ Пустое тело ответа при инициализации")
-                                    _modelInitialized.value = false
                                 }
-                            } else {
-                                Log.w(
-                                    TAG,
-                                    "⚠️ Ошибка инициализации модели ${_selectedModel.value}: код ${response.code()}"
-                                )
+                            }
 
-                                // Попробуем получить тело ошибки для диагностики
-                                val errorBody = response.errorBody()?.string()
-                                if (!errorBody.isNullOrBlank()) {
-                                    Log.w(TAG, "📄 Тело ошибки: $errorBody")
-                                }
+                            withContext(Dispatchers.Main) {
+                                _modelInitialized.value = true
+                            }
+
+                        } catch (e: IOException) {
+                            withContext(Dispatchers.Main) {
                                 _modelInitialized.value = false
                             }
-
-                            _isModelInitializing.value = false
-                            Log.d(
-                                TAG,
-                                "🏁 Завершена инициализация модели ${_selectedModel.value}. Успех: ${_modelInitialized.value}"
-                            )
                         }
-                    }
-
-                    override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
-                        Log.e(
-                            TAG,
-                            "❌ Исключение при инициализации модели ${_selectedModel.value}",
-                            t
-                        )
-
-                        // Дополнительная диагностика
-                        when (t) {
-                            is java.net.SocketTimeoutException -> {
-                                Log.e(
-                                    TAG,
-                                    "⏱️ Таймаут при инициализации модели - возможно модель требует больше времени на загрузку"
-                                )
-                            }
-
-                            is java.net.ConnectException -> {
-                                Log.e(TAG, "🔌 Ошибка подключения к серверу")
-                            }
-
-                            is java.net.UnknownHostException -> {
-                                Log.e(TAG, "🌐 Неизвестный хост - проверьте URL сервера")
-                            }
-                        }
+                    } ?: run {
 
                         _modelInitialized.value = false
-                        _isModelInitializing.value = false
-                        Log.d(
-                            TAG,
-                            "🏁 Завершена инициализация с ошибкой для модели ${_selectedModel.value}"
-                        )
                     }
-                })
+                } else {
+                    _modelInitialized.value = false
+                }
 
+                _isModelInitializing.value = false
             } catch (e: Exception) {
                 _modelInitialized.value = false
                 _isModelInitializing.value = false
-                Log.e(TAG, "❌ Общее исключение при инициализации модели ${_selectedModel.value}", e)
+
             }
         }
     }
@@ -904,7 +787,7 @@ class ChatViewModel @Inject constructor(
 
         // Всегда переинициализируем модель при смене (даже если предыдущая не была инициализирована)
         if (oldModel != displayName) {
-            Log.d(TAG, "🔄 Смена модели: $oldModel -> $displayName")
+
             initializeModel()
         }
     }
@@ -913,7 +796,7 @@ class ChatViewModel @Inject constructor(
      * Повторить инициализацию текущей модели (для UI)
      */
     fun retryModelInitialization() {
-        Log.d(TAG, "🔄 Повторная инициализация модели по запросу пользователя")
+
         initializeModel()
     }
 
@@ -921,8 +804,7 @@ class ChatViewModel @Inject constructor(
      * Отменить инициализацию модели (для UI)
      */
     fun cancelModelInitialization() {
-        Log.d(TAG, "❌ Отмена инициализации модели по запросу пользователя")
-        initializationCall?.cancel()
+
         _isModelInitializing.value = false
         _modelInitialized.value = false
     }
@@ -943,11 +825,11 @@ class ChatViewModel @Inject constructor(
             _isLoadingModels.value = true
 
             try {
-                Log.d(TAG, "📋 Загрузка списка моделей из API...")
+
 
                 // Проверяем подключение к сети
                 if (!NetworkUtils.isConnected(context)) {
-                    Log.w(TAG, "⚠️ Нет подключения к интернету при загрузке моделей")
+
                     baseUrlManager.refreshPublicUrl()
                 }
 
@@ -960,37 +842,37 @@ class ChatViewModel @Inject constructor(
 
                         withContext(Dispatchers.Main) {
                             _availableModels.value = models
-                            Log.d(TAG, "✅ Загружено моделей: ${models.size}")
+
 
                             // Не выбираем модель автоматически - пользователь должен выбрать сам
-                            Log.d(TAG, "⏭️ Ожидание выбора модели пользователем")
+
                         }
                     } else {
-                        Log.w(TAG, "⚠️ Пустой ответ при загрузке моделей")
+
                     }
                 } else {
-                    Log.w(TAG, "⚠️ Ошибка загрузки моделей: код ${response.code()}")
+
                     val errorBody = response.errorBody()?.string()
                     if (!errorBody.isNullOrBlank()) {
-                        Log.w(TAG, "📄 Тело ошибки: $errorBody")
+
                     }
                 }
 
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Исключение при загрузке моделей", e)
+
 
                 // Дополнительная диагностика
                 when (e) {
                     is java.net.SocketTimeoutException -> {
-                        Log.e(TAG, "⏱️ Таймаут при загрузке моделей")
+
                     }
 
                     is java.net.ConnectException -> {
-                        Log.e(TAG, "🔌 Ошибка подключения к серверу")
+
                     }
 
                     is java.net.UnknownHostException -> {
-                        Log.e(TAG, "🌐 Неизвестный хост - проверьте URL сервера")
+
                     }
                 }
             } finally {

@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.ainotes.data.local.entity.Note
 import com.example.ainotes.utils.cleanResponse
-import com.example.linguareader.R
+import com.example.ainotes.R
 
 @Composable
 fun NoteCard(

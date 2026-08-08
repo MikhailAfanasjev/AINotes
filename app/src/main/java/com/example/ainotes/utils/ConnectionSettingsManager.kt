@@ -121,10 +121,6 @@ class ConnectionSettingsManager(context: Context) {
             isLocalNetworkMode() -> getLocalNetworkUrl()
             else -> getNgrokLocalUrl() // Для NGROK возвращаем локальный URL (публичный URL получается через API)
         }
-        android.util.Log.d(
-            ">>>ConnectionSettings",
-            "🌐 getActiveUrl(): режим=${if (isLMStudioMode()) "LM Studio" else "API Key"}, isLocal=${isLocalNetworkMode()}, URL=$url"
-        )
         return url
     }
 

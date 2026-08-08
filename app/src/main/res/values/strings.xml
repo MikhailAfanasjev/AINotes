@@ -8,4 +8,72 @@
     <string name="clear_chat">Очистить чат</string>
     <string name="delete_all_notes">Удалить заметки</string>
     <string name="more_options">Опции</string>
+
+    <!-- ChatScreen -->
+    <string name="activate_model">Активируйте модель</string>
+    <string name="activate_model_desc">Для начала работы выберите AI модель</string>
+    <string name="select_model_button">Выберите модель</string>
+    <string name="chat_loading">Загрузка чата…</string>
+    <string name="start_new_chat">Начните новый чат</string>
+    <string name="start_new_chat_desc">Введите сообщение, чтобы создать новый чат</string>
+    <string name="select_model_in_settings">Выберите модель в настройках</string>
+    <string name="scroll_down">Прокрутить вниз</string>
+    <string name="send_message">Отправить сообщение</string>
+    <string name="stop_generation">Остановить генерацию</string>
+
+    <!-- ChatViewModel -->
+    <string name="new_chat_title">Новый чат</string>
+    <string name="error_message">Ошибка: %1$s</string>
+    <string name="default_system_prompt">Пиши ответы на русском языке</string>
+
+    <!-- ChatMessageItem -->
+    <string name="edit_message">Редактировать сообщение</string>
+    <string name="copy_text">Текст скопирован</string>
+    <string name="create_note">Создать заметку</string>
+    <string name="copy_response">Копировать ответ</string>
+    <string name="retry_response">Повторить ответ</string>
+    <string name="tokens_per_second">т/с</string>
+    <string name="tokens_count">т</string>
+    <string name="generation_time">с</string>
+
+    <!-- SettingsDrawer -->
+    <string name="settings">Настройки</string>
+    <string name="model_initializing">Инициализация модели...</string>
+    <string name="model_not_loaded">Модель не загружена</string>
+    <string name="select_model_to_load">Выберите модель для загрузки</string>
+    <string name="model_init_error">Ошибка инициализации</string>
+    <string name="retry_init">Нажмите для повтора</string>
+    <string name="model_ready">Модель готова</string>
+    <string name="ai_models">Модели ИИ</string>
+    <string name="collapse">Свернуть</string>
+    <string name="expand">Развернуть</string>
+    <string name="loading_models">Загрузка моделей...</string>
+    <string name="failed_to_load_models">Не удалось загрузить модели</string>
+    <string name="click_to_retry">Нажмите для повтора</string>
+    <string name="connection_settings">Настройки подключения</string>
+    <string name="lm_studio_connection">Подключение к LM Studio</string>
+    <string name="lm_studio_local">Подключение в локальной сети</string>
+    <string name="url_label">URL</string>
+    <string name="url_placeholder">http://192.168.1.83:1234</string>
+    <string name="lm_studio_ngrok">Подключение с помощью NGROK</string>
+    <string name="ngrok_local_url_label">Локальный URL</string>
+    <string name="ngrok_api_url_label">NGROK API URL</string>
+    <string name="ngrok_api_url_placeholder">https://api.ngrok.com/tunnels</string>
+    <string name="ngrok_api_key_label">API KEY</string>
+    <string name="ngrok_api_key_placeholder">Введите API ключ NGROK</string>
+    <string name="api_key_connection">Подключение через API ключ</string>
+    <string name="delete_all_notes_drawer">Удалить все заметки</string>
+    <string name="chats">Чаты</string>
+    <string name="create_new_chat">Создать новый чат</string>
+    <string name="create_new_chat_desc">Создать новый чат</string>
+    <string name="no_chats">Нет чатов</string>
+
+    <!-- NoteScreen -->
+    <string name="note_title_placeholder">Заголовок</string>
+    <string name="note_content_placeholder">Заметка</string>
+    <string name="create_note_btn">Создать заметку</string>
+    <string name="update_note_btn">Обновить заметку</string>
+    <string name="cancel_btn">Отменить</string>
+    <string name="note_added">Заметка добавлена</string>
+    <string name="note_updated">Заметка обновлена</string>
 </resources>
